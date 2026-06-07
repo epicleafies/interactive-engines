@@ -13,8 +13,8 @@ isn't claimed.
 Governing documents are in the private sibling repo, expected at
 `../interactive-engines-internal/`:
 
-- `docs/emergence_sim_acceptance_criteria_v2.md` — the criteria (highest authority)
-- `docs/emergence_engine_spec_v2.md` — the engine spec
+- `docs/emergence_sim_acceptance_criteria_v2_1.md` — the criteria (highest authority)
+- `docs/emergence_engine_spec_v3.md` — the engine spec
 - `DECISIONS.md` — the decisions register
 
 Authority order: **criteria > spec > code.** Where they conflict, the upstream
@@ -29,16 +29,33 @@ DECISIONS.md or the spec. Ambiguities are findings to surface, not gaps to fill.
 Do not read anything under `../interactive-engines-internal/archive/` — it is a
 sealed record of a prior abandoned attempt and must not inform this build.
 
-## Currently in force (register D-008)
+## Currently in force (D-008 gate lifted; register D-013–D-020)
 
-Until spec v3 and criteria v2.1 exist in the internal repo, the following are
-BLOCKED: engine rule implementation, criterion assertions, anything encoding
-spec §2–§10 behavior.
+The spec-v2 independent review has returned and been fully triaged through the
+register: 68/68 findings ruled, deferred ledger empty (D-020). Governing
+documents: `emergence_sim_acceptance_criteria_v2_1.md` (tag `criteria-v2.1`)
+and `emergence_engine_spec_v3.md` (tag `spec-v3`); criteria govern the spec,
+the spec governs the engine, conflicts resolve upstream-wins (D-001). Build
+order in force (spec v3 §15):
 
-ALLOWED now: harness plumbing — seeded PRNG with bit-reproducibility tests,
-run/replay capture (seed + config hash + versions), batch runner (N seeded runs
-per configuration), distributional reporting (means, spreads, per-criterion pass
-rates; never a single run presented as a result).
+1. Assertion harness skeleton against criteria v2.1
+2. Reference engine (TypeScript strict, platform-pure, per spec §11 — RNG
+   tape included)
+3. A-series ablations green (A1, A2, A6, A8, A9 especially)
+4. C0 feasibility campaign — every TBD logged in the register before the
+   campaign that tests it (H6), tuned-class constants with sweep artifacts
+5. D-series on the synthesis configuration
+6. Minimal probe surface — named I7 milestone — and the first human sessions
+   (I8 records, I9 probe)
+7. Only then: full surfaces, copy, remaining I-series gates
+
+Cautions: the review report's Appendix A hand-execution is NOT a reference
+trace for v3 — it ran on phantom rulings since overruled (partner reuse,
+fractional seed events, the old step order). Pinned deterministic traces come
+from PROJECT_SEED on the v3 engine only; functional test seeds are documented
+at point of use and chosen for event coverage, never story. When the spec is
+ambiguous, stop and escalate for a register entry (D-012) — never improvise a
+rule.
 
 ## Hard technical constraints (register D-011)
 
