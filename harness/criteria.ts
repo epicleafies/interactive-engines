@@ -47,6 +47,7 @@ import {
 } from "./engine-adapter.ts";
 import { NO_EVIDENCE } from "../engines/emergence/types.ts";
 import { refereeVerdict } from "./referee.ts";
+import { verifyPin, PINNED_DIGEST } from "./project-seed-pin.ts";
 
 /**
  * A functional seed for the engine-backed structural criteria — an arbitrary
@@ -812,6 +813,25 @@ const H: Assertion[] = [
         }
       }
       return pass(`all ${structuralFixtures().length} fixtures replay identically from a fixed seed`);
+    },
+  },
+  {
+    id: "H1.pin",
+    criterion: "H1 — PROJECT_SEED pinned trace (D-032)",
+    claim:
+      "The engine reproduces the pinned PROJECT_SEED reference trace bit-for-bit — by SHA-256 digest and by " +
+      "the committed golden bytes. This is the project's pinned deterministic trace: a change to the engine, " +
+      "RNG tape, payload schema, emission predicates, detector semantics, or the pinning fixture moves these " +
+      "bytes and fails here until a register entry and an explicit re-pin land (D-032).",
+    evaluate: (): AssertionResult => {
+      const check = verifyPin();
+      if (!check.digestMatches) {
+        return fail(`PROJECT_SEED trace digest changed: ${check.currentDigest} != pinned ${PINNED_DIGEST} — needs a register entry + re-pin (D-032)`);
+      }
+      if (!check.goldenMatches) {
+        return fail("PROJECT_SEED trace digest matches but the committed golden bytes differ — re-pin the golden file");
+      }
+      return pass(`engine reproduces the pinned PROJECT_SEED trace exactly (sha256 ${PINNED_DIGEST.slice(0, 12)}...)`);
     },
   },
   {
