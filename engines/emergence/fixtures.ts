@@ -178,6 +178,50 @@ export function scaledFixture(): Config {
   };
 }
 
+/**
+ * `PINNING` — the dedicated fixture the PROJECT_SEED reference trace is pinned
+ * against (register entry D-032). Unlike the live structural fixtures above
+ * (which stay builder latitude per D-023), THIS fixture is register-gated: from
+ * the pin commit forward it may not change without a register entry and an
+ * explicit re-pin (alongside the payload schema, emission predicates, detector
+ * semantics, and the RNG tape).
+ *
+ * Coverage rationale (written and committed BEFORE the PROJECT_SEED trace is
+ * inspected — D-010 discipline; whatever that trace shows pins as-is). It is a
+ * scaled, two-region market chosen so one trace exercises the full mechanical
+ * surface: trading including a bridge acceptance (FIRST_BRIDGE_ACCEPT); the
+ * durability lifecycle (fresh -> stale SPOIL_STAGE -> SPOIL_DESTROY); a fake
+ * lifecycle (fakes created at a mid-recognizability good, revealed on trade or
+ * consumption, or exiting via the fake channel on spoilage); detector evaluation
+ * running through to a DOMINANCE verdict; and regional dynamics (REGION_LEADER,
+ * REGIONS_MERGED). Numbers are coverage choices, never teaching parameters, and
+ * never cited for any C/D/E-series claim.
+ *
+ * The two focal goods contrast: good 0 is strong (all-best, durable,
+ * recognizable) and tends to win the detector verdict; good 1 is a mid focal.
+ * The two all-middle FILLERS carry the spoilage (mid durability) and the fakes
+ * (mid recognizability, fake probability > 0), and exercise filler promotion.
+ */
+export function pinningFixture(): Config {
+  const goods: GoodType[] = [
+    good(0, "good-0 (strong focal)", false, [2, 2, 2, 2, 2, 1]),
+    good(1, "good-1 (mid focal)", false, [1, 2, 2, 2, 2, 1]),
+    good(2, "filler-2", true, [1, 1, 1, 1, 1, 1]),
+    good(3, "filler-3", true, [1, 1, 1, 1, 1, 1]),
+  ];
+  return {
+    mode: "scaled",
+    ablation: { kind: "none" },
+    ringSize: 8,
+    goods,
+    focalGoodIds: [0, 1],
+    mapping: FIXTURE_MAPPING,
+    productionPolicy: "profession",
+    homeGoods: [0, 1, 2, 3, 0, 1, 2, 3],
+    constants: { ...FIXTURE_CONSTANTS, REGION_COUNT: 2, ROUND_CAP: 120 },
+  };
+}
+
 export function tradingPairFixture(): Config {
   const focal = (id: number, label: string): GoodType =>
     // desirability low (mapped to 0.5 below), never spoils, anyone can tell,
