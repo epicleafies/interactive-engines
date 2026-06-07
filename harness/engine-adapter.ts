@@ -9,6 +9,10 @@
  */
 
 import { run } from "../engines/emergence/index.ts";
+import { createState, type EngineStateInternal } from "../engines/emergence/state.ts";
+import { runSetup } from "../engines/emergence/setup.ts";
+import { runRound } from "../engines/emergence/round.ts";
+import { selectPartner } from "../engines/emergence/decide.ts";
 import {
   smallContrastFixture,
   tradingPairFixture,
@@ -19,6 +23,19 @@ import type { Config, RunResult } from "../engines/emergence/types.ts";
 
 export { run };
 export { smallContrastFixture, tradingPairFixture, scaledFixture, singleGoodPerishableFixture };
+
+// Internal run primitives, for audits that must inspect engine state the public
+// RunResult does not surface (the seeded priors, the live conservation counts).
+export { createState, runSetup, runRound, selectPartner };
+export type { EngineStateInternal };
+
+/** Run a config to its cap and return the full internal state (for internal audits). */
+export function runToInternalState(config: Config, seed: number): EngineStateInternal {
+  const state = createState(config, seed);
+  runSetup(state);
+  for (let r = 1; r <= config.constants.ROUND_CAP; r++) runRound(state);
+  return state;
+}
 
 export interface NamedFixture {
   readonly name: string;

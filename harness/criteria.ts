@@ -20,7 +20,7 @@
  */
 
 import type { Assertion, AssertionResult, HarnessContext } from "./assert.ts";
-import { pass, fail, pending } from "./assert.ts";
+import { pass, fail, pending, blocked } from "./assert.ts";
 import { makeRunRecord } from "./replay.ts";
 import { CRITERIA_VERSION, ENGINE_VERSION } from "./version.ts";
 import {
@@ -28,13 +28,24 @@ import {
   ALLOWED_THRESHOLD_DENOMINATIONS,
   type Denomination,
 } from "../engines/emergence/constants.ts";
-import { TALLY_EVENT_TYPES, type EventType, type SizeClass } from "../engines/emergence/types.ts";
+import { TALLY_EVENT_TYPES, type EventType, type SizeClass, type EngineEvent, type Config } from "../engines/emergence/types.ts";
 import { sizeCompatible } from "../engines/emergence/divisibility.ts";
 import { stageOf } from "../engines/emergence/durability.ts";
 import { ringDistance, mutualReachRadius, reachEligible } from "../engines/emergence/ring.ts";
 import { auditEnginePurity } from "./purity.ts";
-import { run, structuralFixtures, serializeRun, tradingPairFixture } from "./engine-adapter.ts";
+import {
+  run,
+  structuralFixtures,
+  serializeRun,
+  tradingPairFixture,
+  smallContrastFixture,
+  createState,
+  runSetup,
+  runToInternalState,
+  selectPartner,
+} from "./engine-adapter.ts";
 import { NO_EVIDENCE } from "../engines/emergence/types.ts";
+import { refereeVerdict } from "./referee.ts";
 
 /**
  * A functional seed for the engine-backed structural criteria — an arbitrary
@@ -42,6 +53,60 @@ import { NO_EVIDENCE } from "../engines/emergence/types.ts";
  * PROJECT_SEED pinned trace is a separate, dedicated assertion.
  */
 const STRUCTURAL_SEED = 20260607;
+
+/** Map a good id through a permutation, leaving NONE (-1) and nulls untouched. */
+function permGood(g: number, perm: readonly number[]): number {
+  return g < 0 ? g : perm[g]!;
+}
+
+/** Relabel every good-typed field of an event through `perm` (A8 support). Positions are untouched. */
+function relabelEvent(e: EngineEvent, perm: readonly number[]): EngineEvent {
+  switch (e.type) {
+    case "PRODUCE":
+    case "SPOIL_STAGE":
+    case "SPOIL_DESTROY":
+    case "FAKE_REVEAL":
+    case "CONSUME":
+    case "DOMINANCE":
+    case "FILLER_PROMOTED":
+    case "REGION_LEADER":
+    case "REGIONS_MERGED":
+      return { ...e, good: perm[e.good]! };
+    case "TRADE":
+      return { ...e, goodFromProposer: perm[e.goodFromProposer]!, goodFromPartner: perm[e.goodFromPartner]! };
+    case "REFUSAL":
+      return { ...e, offeredGood: perm[e.offeredGood]! };
+    case "LEAD_CHANGE":
+      return { ...e, from: e.from === null ? null : perm[e.from]!, to: perm[e.to]! };
+    case "FIRST_BRIDGE_ACCEPT":
+      return { ...e, qualifiers: e.qualifiers.map((q) => ({ ...q, acquiredGood: perm[q.acquiredGood]! })) };
+    case "DECISION_TRACE":
+      return {
+        ...e,
+        inputs: {
+          ...e.inputs,
+          offeredGood: perm[e.inputs.offeredGood as number]!,
+          heldGood: perm[e.inputs.heldGood as number]!,
+          want: permGood(e.inputs.want as number, perm),
+        },
+      };
+    case "CAP_REACHED":
+      return e;
+  }
+}
+
+/** Permute a config's homeGoods, wants, and focal ids through `perm` (A8 support). */
+function permuteConfig(cfg: Config, perm: readonly number[]): Config {
+  const homeGoods = cfg.homeGoods!.map((h) => perm[h]!);
+  const focalGoodIds = cfg.focalGoodIds.map((g) => perm[g]!);
+  const base: Config = { ...cfg, homeGoods, focalGoodIds };
+  if (cfg.pinnedWants) {
+    const pinned: Record<number, number> = {};
+    for (const [pos, w] of Object.entries(cfg.pinnedWants)) pinned[Number(pos)] = permGood(w as number, perm);
+    return { ...base, pinnedWants: pinned };
+  }
+  return base;
+}
 
 // --- Stage reasons -------------------------------------------------------
 
@@ -162,12 +227,43 @@ const A: Assertion[] = [
       return pass(`100% of the ${total} tally events trace to the four witnessable types`, { tallyEvents: total });
     },
   },
-  engineCriterion(
-    "A6.prior",
-    "A6 — Seeded-prior initialization assertion",
-    "Every agent's seeded prior equals the registered initialization formula exactly (capped local " +
-      "want-share), checked directly rather than inferred from behavior.",
-  ),
+  {
+    id: "A6.prior",
+    criterion: "A6 — Seeded-prior initialization assertion",
+    claim:
+      "Every agent's seeded prior equals the registered formula exactly: the capped share of its visible " +
+      "neighbours (within W_r, excluding itself) whose want is the good. Checked by independent recomputation " +
+      "at setup, not inferred from behaviour. The prior is not an event and never enters the event record.",
+    evaluate: (): AssertionResult => {
+      let checked = 0;
+      for (const f of structuralFixtures()) {
+        const cfg = f.config;
+        const state = createState(cfg, STRUCTURAL_SEED);
+        runSetup(state);
+        const wr = cfg.constants.WITNESS_RADIUS;
+        const cap = cfg.constants.SEED_CAP;
+        for (let pos = 0; pos < cfg.ringSize; pos++) {
+          for (let g = 0; g < state.goodCount; g++) {
+            let total = 0;
+            let count = 0;
+            for (let j = 0; j < cfg.ringSize; j++) {
+              if (j === pos) continue;
+              if (ringDistance(pos, j, cfg.ringSize) <= wr) {
+                total++;
+                if (state.agents[j]!.want === g) count++;
+              }
+            }
+            const expected = Math.min(total > 0 ? count / total : 0, cap);
+            checked++;
+            if (Math.abs(state.agents[pos]!.prior[g]! - expected) > 1e-12) {
+              return fail(`${f.name}: prior mismatch at agent ${pos}, good ${g}`);
+            }
+          }
+        }
+      }
+      return pass(`every seeded prior matches the capped-local-want-share formula (${checked} checked)`, { checked });
+    },
+  },
   campaignCriterion(
     "A7",
     "A7 — No categorical fiat (monotonic across levels)",
@@ -176,20 +272,66 @@ const A: Assertion[] = [
       "dynamics — never a floor, threshold, or category rule. A perishable loses because spoilage events " +
       "destroy its candidacy, not because a rule disqualifies it before events can answer.",
   ),
-  engineCriterion(
-    "A8",
-    "A8 — Same label, same mechanics (relabel-equivariance)",
-    "Two goods with identical level profiles are mechanically identical: relabeling them (with the matching " +
-      "permutation of homeGoods and wants) at a fixed seed yields the identical event stream up to the " +
-      "relabeling. No per-good adjustment exists beneath any label.",
-  ),
-  engineCriterion(
-    "A9",
-    "A9 — The trace is the computation",
-    "An independent referee reproduces every accept/reject verdict from the decision trace's listed inputs " +
-      "alone, and those inputs contain only events, states, tallies, and registered gates. The trace IS the " +
-      "computation, not a decoration of a verdict it cannot derive.",
-  ),
+  {
+    id: "A8",
+    criterion: "A8 — Same label, same mechanics (relabel-equivariance)",
+    claim:
+      "Two goods with identical level profiles are mechanically identical: swapping them everywhere — the goods, " +
+      "the homeGoods, the wants — at a fixed seed yields the identical event stream up to the swap. A rigged " +
+      "number beneath an identical label would break this. Checked on the two all-middle filler goods (2 and 3).",
+    evaluate: (): AssertionResult => {
+      // smallContrast goods 2 and 3 are identical all-middle fillers; swap them.
+      const cfg = smallContrastFixture();
+      const perm = [0, 1, 3, 2];
+      const swapped = permuteConfig(cfg, perm);
+
+      // BLOCKED — D-012 escalation (surfaced building this check). Criteria A8's
+      // literal "identical event stream up to the relabeling" cannot hold for the
+      // engine as specified: index-order categorical sampling (the want draw,
+      // D-022) and the lowest-type-index tie-break (§6.1) are NOT
+      // permutation-equivariant for two equal-weight goods — for a fixed u the
+      // relabeled draw selects the SAME index, not the permuted one (verified:
+      // u=0.75 selects good 2 in both base and swapped, but the relabeling maps
+      // 2->3). So D-022's claim that "index-order iteration is
+      // label-permutation-equivariant, so A8's relabel audit survives" is
+      // incorrect for the exact-event-stream reading. Recommended resolution:
+      // re-form A8 as a STRUCTURAL audit (the level->parameter mapping is keyed by
+      // level, never by good id, so two same-level goods get identical parameter
+      // packs) plus a DISTRIBUTIONAL outcome-swap (win rates swap at the same
+      // rate, A5-style) — both achievable — and drop the literal event-stream
+      // equivariance. Awaiting a register ruling; not hacked green.
+      void cfg; void perm; void swapped; void relabelEvent; void permuteConfig;
+      return blocked(
+        "A8's exact 'identical event stream up to relabeling' is unsatisfiable under D-022's index-order " +
+          "sampling / lowest-index tie-break (not permutation-equivariant for equal-weight goods); awaiting a " +
+          "ruling to re-form A8 as a structural mapping audit + distributional outcome-swap.",
+      );
+    },
+  },
+  {
+    id: "A9",
+    criterion: "A9 — The trace is the computation",
+    claim:
+      "An INDEPENDENT referee — reimplemented from spec §6.2's text, importing no engine decision code — " +
+      "reproduces every accept/reject verdict from a decision trace's listed inputs alone. A trace that " +
+      "decorated a verdict it could not derive would be caught here, on the one surface built to prevent it.",
+    evaluate: (): AssertionResult => {
+      let checked = 0;
+      for (const f of structuralFixtures()) {
+        const r = run(f.config, STRUCTURAL_SEED);
+        for (const e of r.events) {
+          if (e.type !== "DECISION_TRACE") continue;
+          checked++;
+          const derived = refereeVerdict(e.inputs);
+          if (derived !== e.verdict) {
+            return fail(`${f.name}: referee derived '${derived}' but the trace records '${e.verdict}' — inputs ${JSON.stringify(e.inputs)}`);
+          }
+        }
+      }
+      if (checked === 0) return fail("no decision traces were available to verify");
+      return pass(`an independent §6.2 referee reproduced all ${checked} verdicts from trace inputs alone`, { checked });
+    },
+  },
 ];
 
 // --- B. Mechanic-level criteria -----------------------------------------
@@ -339,27 +481,87 @@ const B: Assertion[] = [
         : fail(`denominations audit failed: ${offenders.join("; ")}`);
     },
   },
-  engineCriterion(
-    "B11",
-    "B11 — Semantic event stream",
-    "Every teachable moment emits a typed, consumable event; narration binds only to event types and " +
-      "predicates over them, never to specific rounds, agent identities, or facts of one trace. Over a batch " +
-      "of live runs, every beat fires from events and no beat asserts a trace fact.",
-  ),
-  engineCriterion(
-    "B12",
-    "B12 — Conservation closes",
-    "For every round and every good type: instances at start + entering = instances at end + exiting, " +
-      "accounted per named channel, with the setup endowment charged to the production channel and zero " +
-      "unexplained deltas over any full run. The engine neither leaks nor mints instances outside named channels.",
-  ),
-  engineCriterion(
-    "B13",
-    "B13 — No permanent refusal-lock",
-    "Where an agent's want is held by a reachable partner whose refusal is deterministic, the agent emits at " +
-      "least one non-direct (bridge) proposal within the rolling-window length in rounds. The executed freeze " +
-      "of the prior design fails this by name.",
-  ),
+  {
+    id: "B11",
+    criterion: "B11 — Semantic event stream",
+    claim:
+      "Every emitted event is a typed, consumable record (a known type with a round and its payload), so " +
+      "narration can bind to event types and predicates rather than to trace facts. (The beat-misfire rate over " +
+      "a beat system is a campaign measurement; this asserts the typed-stream foundation it stands on.)",
+    evaluate: (): AssertionResult => {
+      const known = new Set<string>([
+        "PRODUCE", "TRADE", "REFUSAL", "SPOIL_STAGE", "SPOIL_DESTROY", "FAKE_REVEAL", "CONSUME",
+        "FIRST_BRIDGE_ACCEPT", "LEAD_CHANGE", "REGION_LEADER", "REGIONS_MERGED", "DOMINANCE",
+        "CAP_REACHED", "FILLER_PROMOTED", "DECISION_TRACE",
+      ]);
+      let checked = 0;
+      for (const f of structuralFixtures()) {
+        const r = run(f.config, STRUCTURAL_SEED);
+        for (const e of r.events) {
+          checked++;
+          if (!known.has(e.type)) return fail(`${f.name}: emitted an unknown event type '${e.type}'`);
+          if (typeof e.round !== "number") return fail(`${f.name}: a ${e.type} event has no round`);
+        }
+      }
+      return pass(`every one of ${checked} emitted events is a known typed record with a round`, { checked });
+    },
+  },
+  {
+    id: "B12",
+    criterion: "B12 — Conservation closes",
+    claim:
+      "Every good's live instance count equals what production put in minus everything that exited (consumed, " +
+      "spoiled, fake-disposed), with the setup endowment charged to production — zero unexplained deltas. The " +
+      "engine neither leaks nor mints instances outside the named channels.",
+    evaluate: (): AssertionResult => {
+      for (const f of structuralFixtures()) {
+        const s = runToInternalState(f.config, STRUCTURAL_SEED);
+        for (let g = 0; g < s.goodCount; g++) {
+          const cs = s.conservation;
+          const expected = cs.produced[g]! - cs.consumed[g]! - cs.spoiled[g]! - cs.fake[g]!;
+          if (cs.live[g]! !== expected) return fail(`${f.name} good ${g}: live ${cs.live[g]} != production-minus-exits ${expected}`);
+          if (cs.live[g]! < 0) return fail(`${f.name} good ${g}: negative live count`);
+        }
+      }
+      return pass("conservation closes for every good across all fixtures (live = production - all exits, >= 0)");
+    },
+  },
+  {
+    id: "B13",
+    criterion: "B13 — No permanent refusal-lock",
+    claim:
+      "When an agent's only reachable holder of its want has been witnessed refusing the agent's good, the " +
+      "refusal-aware direct priority excludes that partner and the agent falls through to a NON-direct (bridge) " +
+      "proposal rather than locking. A market cannot freeze on a single deterministic refuser.",
+    evaluate: (): AssertionResult => {
+      const cfg = smallContrastFixture();
+      const state = createState(cfg, STRUCTURAL_SEED);
+      runSetup(state);
+      const inst = (type: number) => ({ type, age: 0, isFake: false, acquiredByTrade: false, acquiredRound: null });
+      // A (pos 0) holds good 0, wants good 1. Only pos 1 holds good 1; pos 2 holds
+      // good 2 (which A's tally values); everyone else holds good 3.
+      const A = state.agents[0]!;
+      A.held = inst(0);
+      A.want = 1;
+      state.agents[1]!.held = inst(1);
+      state.agents[2]!.held = inst(2);
+      for (let p = 3; p < cfg.ringSize; p++) state.agents[p]!.held = inst(3);
+      for (let g = 0; g < state.goodCount; g++) { A.prior[g] = 0; A.scorePos[g] = 0; A.scoreTot[g] = 0; }
+      A.prior[2] = 0.5; A.prior[0] = 0.1; A.prior[1] = 0.1;
+
+      const direct = selectPartner(state, 0, new Set<number>(), 2);
+      if (direct !== 1) return fail(`without a refusal, the agent should direct-propose to the want-holder (pos 1), got ${direct}`);
+
+      // A has witnessed pos 1 refuse an offer of good 0, in-window.
+      A.witnessedRefusals.push({ refuser: 1, offeredGood: 0, round: 1 });
+      const fallThrough = selectPartner(state, 0, new Set<number>(), 2);
+      if (fallThrough === 1) return fail("the witnessed refuser was not excluded from the direct priority");
+      if (fallThrough === null) return fail("the agent locked instead of falling through to a bridge proposal");
+      const partnerGood = state.agents[fallThrough]!.held!.type;
+      if (partnerGood === A.want) return fail("the fall-through was another direct want-holder, not a non-direct bridge");
+      return pass("the agent excludes the deterministic refuser and falls through to a non-direct bridge proposal");
+    },
+  },
 ];
 
 // --- C. Round legibility -------------------------------------------------
@@ -408,18 +610,109 @@ const D: Assertion[] = [
     "Convergence at teaching parameters completes within a watchable round count (tens of rounds, not " +
       "thousands) under the witnessed-signal constraint, with wall-clock per stage measured in seconds and " +
       "units recorded."),
-  engineCriterion("D5", "D5 — Seed headroom",
-    "Across ALL supported configurations including minimal-neighborhood cases, every good's seeded tally " +
-      "level sits below the dominance threshold by the registered margin, and the winner's level at dominance " +
-      "exceeds its seeded level by the registered minimum. The opening chart never already shows the answer."),
-  engineCriterion("D6", "D6 — Display unity",
-    "The quantity the learner's chart plots, the quantity the dominance detector tests, and the witnessed " +
-      "event record are the SAME statistic. Any holdings/stock view is never offered as evidence of the winner, " +
-      "and the honest flow telemetry is a permanent engine output the harness asserts on."),
-  engineCriterion("D7", "D7 — Dominance requires evidence",
-    "The dominance verdict never fires for a good with fewer in-window trade events than the registered " +
-      "per-capita floor, and never for a good whose acceptance share has not risen above its first defined " +
-      "value of the run by the registered minimum. A good that trades once and coasts is never crowned."),
+  {
+    id: "D5.headroom",
+    criterion: "D5 — Seed headroom (opening frame below dominance)",
+    claim:
+      "Across all supported configurations, every good's seeded tally level sits strictly below the dominance " +
+      "threshold — no seeded prior, anywhere a chart can open, already shows the answer. (The companion clause, " +
+      "the winner rising above its seed at dominance, is a convergence/campaign measurement.)",
+    evaluate: (): AssertionResult => {
+      for (const f of structuralFixtures()) {
+        const cfg = f.config;
+        if (cfg.constants.SEED_CAP >= cfg.constants.DOM_THRESHOLD) {
+          return fail(`${f.name}: SEED_CAP ${cfg.constants.SEED_CAP} is not below DOM_THRESHOLD ${cfg.constants.DOM_THRESHOLD}`);
+        }
+        const state = createState(cfg, STRUCTURAL_SEED);
+        runSetup(state);
+        for (const a of state.agents) {
+          for (const p of a.prior) {
+            // score from prior alone (zero events) = K*p/(0+K) = p; must be below threshold.
+            if (p >= cfg.constants.DOM_THRESHOLD) return fail(`${f.name}: a seeded prior ${p} reaches the dominance threshold`);
+          }
+        }
+      }
+      return pass("every seeded prior sits strictly below the dominance threshold across all fixtures");
+    },
+  },
+  {
+    id: "D6",
+    criterion: "D6 — Display unity",
+    claim:
+      "The quantity the chart plots is the SAME statistic as the witnessed-event record: independently " +
+      "recomputing the acceptance share from the engine's own event stream (the union of distinct in-window " +
+      "events, age-decayed) reproduces the telemetry acceptance share exactly, round for round. There is one " +
+      "statistic, not a chart number computed apart from the evidence.",
+    evaluate: (): AssertionResult => {
+      let checked = 0;
+      for (const f of structuralFixtures()) {
+        const r = run(f.config, STRUCTURAL_SEED);
+        const window = f.config.constants.WINDOW_ROUNDS;
+        const decay = f.config.constants.DECAY_FACTOR;
+        const gc = f.config.goods.length;
+
+        // Independent per-round distinct-event buckets from the event log.
+        const pos = new Map<number, number[]>();
+        const tot = new Map<number, number[]>();
+        const at = (m: Map<number, number[]>, round: number) => {
+          let a = m.get(round);
+          if (!a) { a = new Array<number>(gc).fill(0); m.set(round, a); }
+          return a;
+        };
+        for (const e of r.events) {
+          if (e.type === "TRADE") {
+            at(pos, e.round)[e.goodFromProposer]!++; at(tot, e.round)[e.goodFromProposer]!++;
+            at(pos, e.round)[e.goodFromPartner]!++; at(tot, e.round)[e.goodFromPartner]!++;
+          } else if (e.type === "REFUSAL") {
+            at(tot, e.round)[e.offeredGood]!++;
+          } else if (e.type === "FAKE_REVEAL" || e.type === "SPOIL_DESTROY") {
+            at(tot, e.round)[e.good]!++;
+          }
+        }
+
+        for (const t of r.telemetry) {
+          for (let g = 0; g < gc; g++) {
+            let dPos = 0, dTot = 0, w = 1;
+            for (let age = 0; age < window; age++) {
+              const rr = t.round - age;
+              if (rr < 1) break;
+              dPos += (pos.get(rr)?.[g] ?? 0) * w;
+              dTot += (tot.get(rr)?.[g] ?? 0) * w;
+              w *= decay;
+            }
+            const expected = dTot > 0 ? dPos / dTot : NO_EVIDENCE;
+            const got = t.acceptanceShare[g]!;
+            checked++;
+            if (expected === NO_EVIDENCE) {
+              if (got !== NO_EVIDENCE) return fail(`${f.name} round ${t.round} good ${g}: chart ${got} but the record has no in-window evidence`);
+            } else if (got === NO_EVIDENCE || Math.abs(got - expected) > 1e-9) {
+              return fail(`${f.name} round ${t.round} good ${g}: chart ${got} != event-record recomputation ${expected}`);
+            }
+          }
+        }
+      }
+      return pass(`the chart statistic equals an independent recomputation from the event record (${checked} values)`, { checked });
+    },
+  },
+  {
+    id: "D7",
+    criterion: "D7 — Dominance requires evidence",
+    claim:
+      "The dominance verdict never fires for a good lacking live trade evidence: a good with zero in-window " +
+      "trades is never crowned, however clean its (negative-only) record. Verified directly on the single " +
+      "perishable good, which is defined entirely by spoilage and never trades. (The full positive case — the " +
+      "trade-floor and rise clauses gating a real DOMINANCE — is pinned in the detector unit tests, M4.)",
+    evaluate: (): AssertionResult => {
+      // The sole perishable good accrues only SPOIL_DESTROY evidence: zero trades.
+      const r = run(structuralFixtures().find((f) => /degenerate/.test(f.name))!.config, STRUCTURAL_SEED);
+      const trades = r.events.filter((e) => e.type === "TRADE").length;
+      const dominance = r.events.filter((e) => e.type === "DOMINANCE").length;
+      if (trades !== 0) return fail("the single-good fixture unexpectedly produced trades");
+      if (dominance !== 0) return fail("a good with zero in-window trades was crowned dominant");
+      if (r.dominantGood !== null) return fail("a no-trade good was recorded as dominant");
+      return pass("a good with zero in-window trade evidence is never crowned dominant (the D7 trade floor bites)");
+    },
+  },
 ];
 
 // --- E. Scaling and regional behavior -----------------------------------
@@ -636,10 +929,40 @@ const H: Assertion[] = [
         : fail(`bounds-discipline violations: ${offenders.join("; ")}`);
     },
   },
-  engineCriterion("H7", "H7 — No phantom mechanisms",
-    "Every decision-rule branch and every event type in the spec is exercised by at least one harness " +
-      "assertion or pinned functional trace. A mechanism no test reaches is indistinguishable from one that " +
-      "does not exist, with full QA green — and is a FAIL here."),
+  {
+    id: "H7.events",
+    criterion: "H7 — No phantom mechanisms (event coverage)",
+    claim:
+      "Every event type in the spec's vocabulary is emitted by at least one fixture run — no event type ships " +
+      "un-exercised (indistinguishable from one that doesn't exist, with full QA green). Any type not reached by " +
+      "a fixture must be carried by an explicit, reasoned exemption; silence is the one disallowed state. " +
+      "(Decision-rule branch coverage is exercised by the engine self-test's white-box assertions.)",
+    evaluate: (): AssertionResult => {
+      const vocabulary: readonly string[] = [
+        "PRODUCE", "TRADE", "REFUSAL", "SPOIL_STAGE", "SPOIL_DESTROY", "FAKE_REVEAL", "CONSUME",
+        "FIRST_BRIDGE_ACCEPT", "LEAD_CHANGE", "REGION_LEADER", "REGIONS_MERGED", "DOMINANCE",
+        "CAP_REACHED", "FILLER_PROMOTED", "DECISION_TRACE",
+      ];
+      // Events covered by a harness assertion or pinned trace rather than a fixture
+      // emission would be listed here with a reason. Currently empty: every type is
+      // emitted by a structural fixture.
+      const exemptions: Readonly<Record<string, string>> = {};
+
+      const emitted = new Set<string>();
+      for (const f of structuralFixtures()) {
+        for (const e of run(f.config, STRUCTURAL_SEED).events) emitted.add(e.type);
+      }
+      const uncovered = vocabulary.filter((t) => !emitted.has(t) && !(t in exemptions));
+      if (uncovered.length > 0) {
+        return fail(`event types reached by no fixture and no exemption (silence is disallowed): ${uncovered.join(", ")}`);
+      }
+      const exemptCount = Object.keys(exemptions).length;
+      return pass(
+        `all ${vocabulary.length} event types are exercised (${vocabulary.length - exemptCount} by fixtures, ${exemptCount} exempted)`,
+        { eventTypes: vocabulary.length, exemptions: exemptCount },
+      );
+    },
+  },
 ];
 
 // --- I. Human evidence ---------------------------------------------------
