@@ -194,18 +194,13 @@ export function stepStatistics(
           if (runnerUp === null || ah > runnerUp) runnerUp = ah;
         }
       }
-      if (definedOthers === 0) {
-        // ESCALATION (D-012): §9.2's gap clause has no runner-up when fewer than
-        // two goods have a defined A(g). Two faithful readings diverge; awaiting a
-        // register ruling. No current fixture reaches this branch (degenerate,
-        // single-good-with-evidence configs only); it throws rather than silently
-        // choosing.
-        throw new Error(
-          "D-012 escalation: DOM_GAP runner-up is undefined (fewer than two goods with defined A(g)); " +
-            "the dominance gap clause for a lone evidenced good is unruled — see statistic.ts",
-        );
-      }
-      allHold = av - runnerUp! >= c.DOM_GAP;
+      // D-029: when no other good has a defined A(g) there is no runner-up, so
+      // the gap clause is unsatisfiable and DOMINANT(g) is false — a DEFINED
+      // verdict, not an error. Dominance is a comparative claim; with no
+      // comparator there is no verdict. (Reachable only via a sole-defined good,
+      // which carries only negative evidence and already fails the threshold and
+      // trade-floor clauses; the defined false honors G6 in every state.)
+      allHold = definedOthers > 0 && av - runnerUp! >= c.DOM_GAP;
     }
 
     gs.sustainCount = allHold ? gs.sustainCount + 1 : 0;

@@ -30,7 +30,7 @@ import { selectPartner, evaluateAcceptance, stepTrading } from "../engines/emerg
 import { tallyUpdate } from "../engines/emergence/score.ts";
 import { stepStatistics, computeA, windowedTrades, writeBuckets } from "../engines/emergence/statistic.ts";
 import type { InstanceState, GoodStatState } from "../engines/emergence/state.ts";
-import { smallContrastFixture, tradingPairFixture, scaledFixture, FIXTURE_CONSTANTS } from "../engines/emergence/fixtures.ts";
+import { smallContrastFixture, tradingPairFixture, scaledFixture, singleGoodPerishableFixture, FIXTURE_CONSTANTS } from "../engines/emergence/fixtures.ts";
 import { NONE, NO_EVIDENCE, type Config, type EngineEvent } from "../engines/emergence/types.ts";
 
 /** Directly set a good's rolling bucket for a round (white-box statistics tests). */
@@ -795,4 +795,22 @@ const domCount = (state: ReturnType<typeof detectorState>, good: number) =>
   }
 }
 
-console.log(`engine self-test OK — ${checks} checks passed (M1 setup; M2 mechanics; M3 trading; M4 statistics & detection).`);
+// (h) D-029 / H7: a single perishable good gets defined by spoilage, the detector
+//     evaluates it with no runner-up, and returns a DEFINED "not dominant" — no
+//     throw, no crash, a verdict the spec owes.
+{
+  const cap = 20;
+  const state = createState(singleGoodPerishableFixture(), FUNCTIONAL_SEED);
+  runSetup(state);
+  // The detector branch must NOT throw at any point.
+  for (let r = 1; r <= cap; r++) runRound(state); // would throw on the old escalation guard
+
+  check(state.goodCount === 1, "the fixture has exactly one good");
+  check(state.goodStats[0]!.firstDefinedA !== null, "spoilage defines the sole good (A becomes defined)");
+  check(state.events.filter((e) => e.type === "SPOIL_DESTROY").length > 0, "the perishable good actually spoils");
+  check(state.events.filter((e) => e.type === "DOMINANCE").length === 0, "a sole-defined good is never crowned dominant (no runner-up)");
+  check(state.dominantGood === null, "no dominant good is recorded");
+  check(state.events.some((e) => e.type === "CAP_REACHED"), "the run reaches the cap with a defined non-convergence outcome");
+}
+
+console.log(`engine self-test OK — ${checks} checks passed (M1 setup; M2 mechanics; M3 trading; M4 statistics & detection; D-029).`);

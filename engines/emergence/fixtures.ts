@@ -130,6 +130,29 @@ export function smallContrastFixture(): Config {
  * never cited for any C/D/E claim. FILLER_MIN_SHARE = 0 here is non-canonical.
  */
 /**
+ * `singleGoodPerishable` — one perishable good, no others (H7 coverage for the
+ * D-029 detector branch). With a single good every agent's want support is empty
+ * after homeGood exclusion, so no one trades; the good simply spoils and is
+ * re-endowed, defining the sole good with negative evidence (A = 0). The detector
+ * then evaluates a good with no runner-up and returns a DEFINED "not dominant",
+ * never a crash. Structural fixture (D-023).
+ */
+export function singleGoodPerishableFixture(): Config {
+  return {
+    mode: "small",
+    ablation: { kind: "none" },
+    ringSize: 4,
+    // spoils fast, anyone can tell (no fakes), any-amount, travels light, scarcity middle.
+    goods: [good(0, "the only good", false, [1, 0, 2, 2, 2, 1])],
+    focalGoodIds: [0],
+    mapping: FIXTURE_MAPPING,
+    productionPolicy: "profession",
+    homeGoods: [0, 0, 0, 0],
+    constants: { ...FIXTURE_CONSTANTS, FILLER_MIN_SHARE: 0, ROUND_CAP: 20 },
+  };
+}
+
+/**
  * `scaled` — a minimal scaled-mode ring (8 positions, 2 regions) for exercising
  * region attribution (§1, §9.3): a cross-border trade is attributed to both
  * parties' regions. Structural fixture (D-023); the region count and size are
