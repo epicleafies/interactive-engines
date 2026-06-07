@@ -9,7 +9,8 @@
     "typecheck": "tsc --noEmit",
     "harness": "node --import tsx harness/run.ts",
     "selftest": "node --import tsx harness/self-test.ts",
-    "test": "node --import tsx harness/self-test.ts && node --import tsx harness/run.ts"
+    "engine-selftest": "node --import tsx harness/engine-selftest.ts",
+    "test": "node --import tsx harness/self-test.ts && node --import tsx harness/engine-selftest.ts && node --import tsx harness/run.ts"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",

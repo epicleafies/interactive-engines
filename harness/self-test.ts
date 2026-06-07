@@ -12,6 +12,7 @@
  */
 
 import { makeRng } from "./prng.ts";
+import { bernoulli, categorical, shuffleOrder } from "../engines/emergence/rng.ts";
 import { fail, pass, type Assertion, type HarnessContext } from "./assert.ts";
 import { summarize as summarizeReport, evaluateAll } from "./report.ts";
 import { passRate, summarize as summarizeStats } from "./stats.ts";
@@ -124,6 +125,49 @@ function check(cond: boolean, label: string): void {
   check(s1.length === 50, "must derive the requested number of seeds");
   check(new Set(s1).size === 50, "derived seeds must be distinct");
   check(s1.every((x, i) => x === s2[i]), "seed derivation must be replayable from the base seed");
+}
+
+// 8. Engine RNG tape (D-022). Seed 7's first draws are u =
+//    [0.011704..., 0.061958..., 0.976907...]; the vectors below are hand-derived
+//    from those draws and pin the tape's exact arithmetic.
+{
+  // Bernoulli: isFake iff u < f. f=0 never fires, f=1 always; mid-f follows u.
+  check(!bernoulli(makeRng(7), 0), "bernoulli(f=0) must never fire");
+  check(bernoulli(makeRng(7), 1), "bernoulli(f=1) must always fire");
+  {
+    const r = makeRng(7);
+    const seq = [bernoulli(r, 0.05), bernoulli(r, 0.05), bernoulli(r, 0.05)];
+    check(seq[0] === true && seq[1] === false && seq[2] === false, "bernoulli(0.05) tape: u<f only on the first draw");
+  }
+
+  // Categorical: ascending-index cumulative, first cumulative > u.
+  // weights [0.2,0.3,0.5]: u=0.0117->idx0, u=0.0620->idx0, u=0.9769->idx2 (cum 1.0).
+  {
+    const r = makeRng(7);
+    const got = [categorical(r, [0.2, 0.3, 0.5]), categorical(r, [0.2, 0.3, 0.5]), categorical(r, [0.2, 0.3, 0.5])];
+    check(got[0] === 0 && got[1] === 0 && got[2] === 2, `categorical tape vector wrong: ${JSON.stringify(got)}`);
+  }
+  // Degenerate distributions select the only possible index.
+  check(categorical(makeRng(7), [1]) === 0, "categorical singleton must select index 0");
+  check(categorical(makeRng(7), [0, 1, 0]) === 1, "categorical must select the sole positive-weight index");
+
+  // Shuffle: Durstenfeld downward on [0,1,2,3] with j = floor(u*(i+1)).
+  // i=3 j=0 -> [3,1,2,0]; i=2 j=0 -> [2,1,3,0]; i=1 j=1 -> [2,1,3,0].
+  {
+    const order = shuffleOrder(makeRng(7), 4);
+    check(JSON.stringify(order) === JSON.stringify([2, 1, 3, 0]), `shuffle tape vector wrong: ${JSON.stringify(order)}`);
+    check(new Set(order).size === 4, "shuffle must be a permutation");
+  }
+  // Exactly n-1 draws consumed: stream position after shuffle(n=4) equals 3 draws.
+  {
+    const rA = makeRng(7);
+    shuffleOrder(rA, 4);
+    const after = rA.nextFloat();
+    const rB = makeRng(7);
+    rB.nextFloat(); rB.nextFloat(); rB.nextFloat();
+    check(after === rB.nextFloat(), "shuffle(n=4) must consume exactly 3 draws");
+  }
+  check(shuffleOrder(makeRng(7), 1).length === 1 && JSON.stringify(shuffleOrder(makeRng(7), 0)) === "[]", "shuffle of n<=1 consumes no draws");
 }
 
 console.log(`self-test OK — ${checks} checks passed; the harness can produce PASS and FAIL.`);
