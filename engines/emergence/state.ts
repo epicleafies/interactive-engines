@@ -107,6 +107,10 @@ export interface EngineStateInternal {
   round: number;
   agents: AgentState[];
   goodStats: GoodStatState[];
+  /** Region-scoped per-good statistics (scaled mode): indexed [region][good]. */
+  regionGoodStats: GoodStatState[][];
+  /** Number of regions (1 outside scaled mode). */
+  readonly regionCount: number;
   conservation: ConservationState;
 
   /** The append-only event log, in emission order. */
@@ -117,6 +121,8 @@ export interface EngineStateInternal {
   // Detection / narration state
   leader: number | null;
   regionLeaders: (number | null)[];
+  /** Whether all regional leaders currently align on one good (for REGIONS_MERGED rising edge). */
+  regionsAligned: boolean;
   promoted: Set<number>;
   firstBridgeDone: boolean;
   dominantGood: number | null;
@@ -168,6 +174,13 @@ export function createState(config: Config, seed: number): EngineStateInternal {
   const goodStats: GoodStatState[] = [];
   for (let g = 0; g < goodCount; g++) goodStats.push(makeGoodStat(windowRounds));
 
+  const regionGoodStats: GoodStatState[][] = [];
+  for (let r = 0; r < regionCount; r++) {
+    const perGood: GoodStatState[] = [];
+    for (let g = 0; g < goodCount; g++) perGood.push(makeGoodStat(windowRounds));
+    regionGoodStats.push(perGood);
+  }
+
   return {
     config,
     rng: makeRng(seed),
@@ -175,6 +188,8 @@ export function createState(config: Config, seed: number): EngineStateInternal {
     round: 0,
     agents,
     goodStats,
+    regionGoodStats,
+    regionCount,
     conservation: {
       live: zeros(goodCount),
       produced: zeros(goodCount),
@@ -186,6 +201,7 @@ export function createState(config: Config, seed: number): EngineStateInternal {
     telemetry: [],
     leader: null,
     regionLeaders: new Array<number | null>(regionCount).fill(null),
+    regionsAligned: false,
     promoted: new Set<number>(),
     firstBridgeDone: false,
     dominantGood: null,

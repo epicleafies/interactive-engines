@@ -35,3 +35,13 @@ export function reachEligible(
 ): boolean {
   return ringDistance(a, b, n) <= mutualReachRadius(reachA, reachB);
 }
+
+/**
+ * The region (equal contiguous arc) a ring position belongs to (scaled mode,
+ * §1). `regionCount` must divide `n` (validated at config load), so the arcs are
+ * equal. Returns a region index in [0, regionCount).
+ */
+export function regionOf(position: number, n: number, regionCount: number): number {
+  const arc = n / regionCount;
+  return Math.floor(position / arc);
+}

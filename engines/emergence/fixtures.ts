@@ -129,6 +129,32 @@ export function smallContrastFixture(): Config {
  * coincidence. This is a structural fixture (D-023): NOT a teaching parameter,
  * never cited for any C/D/E claim. FILLER_MIN_SHARE = 0 here is non-canonical.
  */
+/**
+ * `scaled` — a minimal scaled-mode ring (8 positions, 2 regions) for exercising
+ * region attribution (§1, §9.3): a cross-border trade is attributed to both
+ * parties' regions. Structural fixture (D-023); the region count and size are
+ * coverage choices, not teaching parameters.
+ */
+export function scaledFixture(): Config {
+  const goods: GoodType[] = [
+    good(0, "good-0", false, [2, 2, 2, 2, 2, 1]),
+    good(1, "good-1", false, [1, 2, 2, 2, 2, 1]),
+    good(2, "filler-2", true, [1, 1, 1, 1, 1, 1]),
+    good(3, "filler-3", true, [1, 1, 1, 1, 1, 1]),
+  ];
+  return {
+    mode: "scaled",
+    ablation: { kind: "none" },
+    ringSize: 8,
+    goods,
+    focalGoodIds: [0, 1],
+    mapping: FIXTURE_MAPPING,
+    productionPolicy: "profession",
+    homeGoods: [0, 1, 2, 3, 0, 1, 2, 3],
+    constants: { ...FIXTURE_CONSTANTS, REGION_COUNT: 2 },
+  };
+}
+
 export function tradingPairFixture(): Config {
   const focal = (id: number, label: string): GoodType =>
     // desirability low (mapped to 0.5 below), never spoils, anyone can tell,

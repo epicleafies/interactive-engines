@@ -27,6 +27,7 @@ import { wantDistribution } from "./setup.ts";
 import { categorical } from "./rng.ts";
 import { stepTrading } from "./decide.ts";
 import { tallyUpdate } from "./score.ts";
+import { stepStatistics } from "./statistic.ts";
 import { NONE } from "./types.ts";
 import type { EngineStateInternal, InstanceState } from "./state.ts";
 
@@ -166,10 +167,7 @@ export function stepEndOfRound(state: EngineStateInternal): void {
   }
 }
 
-/**
- * Run one full round. Step 7 (statistics/detection/telemetry) is wired in M4;
- * until then a round runs mechanics, trade, and the tally update.
- */
+/** Run one full round, all seven steps in order. */
 export function runRound(state: EngineStateInternal): void {
   state.round += 1;
   const round = state.round;
@@ -179,7 +177,9 @@ export function runRound(state: EngineStateInternal): void {
   stepProduction(state, round); // 3
   stepTrading(state, round); // 4
   stepConsumption(state, round); // 5
-  tallyUpdate(state, round, state.events.slice(eventStart)); // 6
-  // step 7 (statistics/detection/telemetry): M4
+  // Steps 6 and 7 both read the events witnessed/emitted this round.
+  const roundEvents = state.events.slice(eventStart);
+  tallyUpdate(state, round, roundEvents); // 6
+  stepStatistics(state, round, roundEvents); // 7
   stepEndOfRound(state);
 }

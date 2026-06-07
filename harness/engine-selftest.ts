@@ -27,9 +27,20 @@ import {
   stepEndOfRound,
 } from "../engines/emergence/round.ts";
 import { selectPartner, evaluateAcceptance, stepTrading } from "../engines/emergence/decide.ts";
-import type { InstanceState } from "../engines/emergence/state.ts";
-import { smallContrastFixture, tradingPairFixture, FIXTURE_CONSTANTS } from "../engines/emergence/fixtures.ts";
-import { NONE, type Config, type EngineEvent } from "../engines/emergence/types.ts";
+import { tallyUpdate } from "../engines/emergence/score.ts";
+import { stepStatistics, computeA, windowedTrades, writeBuckets } from "../engines/emergence/statistic.ts";
+import type { InstanceState, GoodStatState } from "../engines/emergence/state.ts";
+import { smallContrastFixture, tradingPairFixture, scaledFixture, FIXTURE_CONSTANTS } from "../engines/emergence/fixtures.ts";
+import { NONE, NO_EVIDENCE, type Config, type EngineEvent } from "../engines/emergence/types.ts";
+
+/** Directly set a good's rolling bucket for a round (white-box statistics tests). */
+function setBkt(gs: GoodStatState, round: number, window: number, pos: number, tot: number, trade: number): void {
+  const i = round % window;
+  gs.posBucket[i] = pos;
+  gs.totBucket[i] = tot;
+  gs.tradeBucket[i] = trade;
+  gs.bucketRound[i] = round;
+}
 
 /** Drive only the M2 steps (1,2,3,5) — no trading, no tally — for isolation tests. */
 function noTradeRound(state: EngineStateInternal): void {
@@ -597,4 +608,191 @@ function mkP(state: EngineStateInternal, want: number, heldType: number) {
   check(picked2 !== null && state.agents[picked2]!.held!.type === 2, "the fall-through still finds another holder of the want");
 }
 
-console.log(`engine self-test OK — ${checks} checks passed (M1 setup; M2 mechanics; M3 tallies, decisions, trading).`);
+// =========================================================================
+// M4 — statistics, detector, regions, telemetry (step 7). Pins (a)-(f).
+// =========================================================================
+
+// (a) A(g) counts each event ONCE globally, never per witness — it is not any
+//     agent's tally (§9.1). One trade is one global event regardless of how many
+//     agents witness it, whereas the per-agent tally increments per witness.
+{
+  const trade: EngineEvent = { type: "TRADE", round: 1, proposer: 0, partner: 1, goodFromProposer: 0, goodFromPartner: 1, viaBridge: false };
+  const W = tradingPairFixture().constants.WINDOW_ROUNDS;
+
+  const gstate = createState(tradingPairFixture(), FUNCTIONAL_SEED);
+  writeBuckets(gstate, 1, [trade]);
+  const globalTotal = gstate.goodStats[0]!.totBucket[1 % W]!;
+  check(globalTotal === 1, "one trade is exactly one global event for good 0 (counted once)");
+  check(windowedTrades(gstate.goodStats[0]!, 1, W) === 1, "good 0 has exactly one in-window trade event");
+
+  const astate = createState(tradingPairFixture(), FUNCTIONAL_SEED);
+  runSetup(astate); // positions the agents so witnessing is defined
+  for (const ag of astate.agents) for (let g = 0; g < astate.goodCount; g++) { ag.scorePos[g] = 0; ag.scoreTot[g] = 0; }
+  tallyUpdate(astate, 1, [trade]);
+  let perWitnessSum = 0;
+  for (const ag of astate.agents) perWitnessSum += ag.scoreTot[0]!;
+  check(perWitnessSum > globalTotal, "the SAME trade increments many per-agent tallies (per witness) while A(g) counts it once");
+}
+
+// (b) Window membership and decay COMPOSE: in-window events carry age-decayed
+//     weight (not flat), and an event older than WINDOW_ROUNDS falls out (§9.1).
+{
+  const W = 10;
+  const DF = 0.8;
+  const state = createState(tradingPairFixture(), FUNCTIONAL_SEED);
+  const gs = state.goodStats[0]!;
+  setBkt(gs, 0, W, 0, 1, 0); // a negative event at round 0
+  setBkt(gs, 5, W, 1, 1, 0); // a positive event at round 5
+  const A = computeA(gs, 5, W, DF);
+  const expectedDecayed = 1 / (1 + Math.pow(DF, 5)); // round-0 event aged 5 rounds
+  const flat = 1 / (1 + 1);
+  check(A !== NO_EVIDENCE && Math.abs(A - expectedDecayed) < 1e-12, "in-window events are age-decayed, not flat-weighted");
+  check(Math.abs(expectedDecayed - flat) > 1e-6, "(the decayed and flat values genuinely differ)");
+
+  const gs2 = state.goodStats[1]!;
+  setBkt(gs2, 5, W, 1, 1, 0);
+  check(computeA(gs2, 14, W, DF) !== NO_EVIDENCE, "an event is in-window through round r+WINDOW_ROUNDS-1");
+  check(computeA(gs2, 15, W, DF) === NO_EVIDENCE, "an event older than WINDOW_ROUNDS rounds falls out of the window");
+}
+
+// (c) The D7 rise baseline is the FIRST defined A(g) of the run, and does NOT
+//     reset when the window empties to NO_EVIDENCE and later refills (§9.2).
+{
+  const config: Config = { ...tradingPairFixture(), constants: { ...tradingPairFixture().constants, WINDOW_ROUNDS: 1, ROUND_CAP: 100 } };
+  const W = 1;
+  const DF = config.constants.DECAY_FACTOR;
+  const state = createState(config, FUNCTIONAL_SEED);
+  const g0 = state.goodStats[0]!;
+  const g1 = state.goodStats[1]!;
+
+  setBkt(g0, 1, W, 9, 10, 0); setBkt(g1, 1, W, 1, 10, 0); stepStatistics(state, 1, []);
+  check(g0.firstDefinedA === 0.9, "the first defined A(g) of the run is recorded");
+  // round 2: good 0 has no events -> A empties to NO_EVIDENCE (window is 1 round).
+  setBkt(g1, 2, W, 1, 10, 0); stepStatistics(state, 2, []);
+  check(computeA(g0, 2, W, DF) === NO_EVIDENCE, "good 0's A empties to NO_EVIDENCE");
+  check(g0.firstDefinedA === 0.9, "firstDefinedA survives the NO_EVIDENCE gap (not reset)");
+  // round 3: good 0 refills with a DIFFERENT value.
+  setBkt(g0, 3, W, 3, 10, 0); setBkt(g1, 3, W, 1, 10, 0); stepStatistics(state, 3, []);
+  check(g0.firstDefinedA === 0.9, "firstDefinedA stays the run's first value after refill, not the refill value");
+}
+
+// Shared dominance-detector config: a 1-round window so each round's A and trade
+// count are exactly that round's injected bucket (clean control of the clauses).
+function detectorState() {
+  const base = tradingPairFixture();
+  const config: Config = {
+    ...base,
+    constants: { ...base.constants, WINDOW_ROUNDS: 1, DOM_SUSTAIN: 3, DOM_THRESHOLD: 0.7, DOM_GAP: 0.15, DOM_MIN_TRADE_SHARE: 0.1, DOM_RISE_MIN: 0.05, ROUND_CAP: 100 },
+  };
+  return createState(config, FUNCTIONAL_SEED);
+}
+const domCount = (state: ReturnType<typeof detectorState>, good: number) =>
+  state.events.filter((e) => e.type === "DOMINANCE" && e.good === good).length;
+
+// (d) The four detector clauses must hold JOINTLY on DOM_SUSTAIN consecutive
+//     rounds; a single miss resets the streak (§9.2).
+{
+  const state = detectorState();
+  const g0 = state.goodStats[0]!;
+  const g1 = state.goodStats[1]!;
+  const W = 1;
+  // round 1: good 0 low (firstDefined small, so the rise clause can later pass).
+  setBkt(g0, 1, W, 0, 1, 0); setBkt(g1, 1, W, 1, 10, 0); stepStatistics(state, 1, []);
+  // rounds 2,3: all four clauses hold (A=0.9, gap 0.8, trades 6, rise 0.9).
+  for (const r of [2, 3]) { setBkt(g0, r, W, 9, 10, 6); setBkt(g1, r, W, 1, 10, 0); stepStatistics(state, r, []); }
+  check(domCount(state, 0) === 0, "no dominance before the clauses hold for DOM_SUSTAIN consecutive rounds");
+  setBkt(g0, 4, W, 9, 10, 6); setBkt(g1, 4, W, 1, 10, 0); stepStatistics(state, 4, []);
+  check(domCount(state, 0) === 1 && state.dominantGood === 0, "DOMINANCE fires once the four clauses hold for DOM_SUSTAIN consecutive rounds");
+}
+{
+  // reset: a clause miss mid-streak forces a fresh DOM_SUSTAIN run.
+  const state = detectorState();
+  const g0 = state.goodStats[0]!;
+  const g1 = state.goodStats[1]!;
+  const W = 1;
+  setBkt(g0, 1, W, 0, 1, 0); setBkt(g1, 1, W, 1, 10, 0); stepStatistics(state, 1, []);
+  setBkt(g0, 2, W, 9, 10, 6); setBkt(g1, 2, W, 1, 10, 0); stepStatistics(state, 2, []); // streak 1
+  setBkt(g0, 3, W, 5, 10, 6); setBkt(g1, 3, W, 1, 10, 0); stepStatistics(state, 3, []); // A=0.5 < threshold -> reset
+  for (const r of [4, 5]) { setBkt(g0, r, W, 9, 10, 6); setBkt(g1, r, W, 1, 10, 0); stepStatistics(state, r, []); }
+  check(domCount(state, 0) === 0, "a single clause miss resets the consecutive-round streak");
+  setBkt(g0, 6, W, 9, 10, 6); setBkt(g1, 6, W, 1, 10, 0); stepStatistics(state, 6, []);
+  check(domCount(state, 0) === 1, "dominance fires only after a fresh DOM_SUSTAIN consecutive run post-reset");
+}
+
+// (e) Leadership starts at none, skips NO_EVIDENCE, ties retain the incumbent;
+//     and DOMINANCE re-fires on every rising edge (§9.2).
+{
+  const state = detectorState();
+  const g0 = state.goodStats[0]!;
+  const g1 = state.goodStats[1]!;
+  const W = 1;
+  const leadCount = () => state.events.filter((e) => e.type === "LEAD_CHANGE").length;
+  // round 1: only good 0 defined -> it leads (NO_EVIDENCE good 1 is skipped).
+  setBkt(g0, 1, W, 5, 10, 0); stepStatistics(state, 1, []);
+  check(state.leader === 0 && leadCount() === 1, "leadership goes to the only defined good, skipping NO_EVIDENCE");
+  // round 2: a tie retains the incumbent.
+  setBkt(g0, 2, W, 5, 10, 0); setBkt(g1, 2, W, 5, 10, 0); stepStatistics(state, 2, []);
+  check(state.leader === 0 && leadCount() === 1, "a tie for the max retains the incumbent leader");
+  // round 3: a strict new max changes leadership.
+  setBkt(g0, 3, W, 5, 10, 0); setBkt(g1, 3, W, 6, 10, 0); stepStatistics(state, 3, []);
+  check(state.leader === 1 && leadCount() === 2, "a strictly-greatest different good changes leadership");
+}
+{
+  // DOMINANCE re-fires after dominance is lost and regained.
+  const state = detectorState();
+  const g0 = state.goodStats[0]!;
+  const g1 = state.goodStats[1]!;
+  const W = 1;
+  setBkt(g0, 1, W, 0, 1, 0); setBkt(g1, 1, W, 1, 10, 0); stepStatistics(state, 1, []);
+  for (const r of [2, 3, 4]) { setBkt(g0, r, W, 9, 10, 6); setBkt(g1, r, W, 1, 10, 0); stepStatistics(state, r, []); }
+  check(domCount(state, 0) === 1, "good 0 reaches dominance");
+  setBkt(g0, 5, W, 5, 10, 6); setBkt(g1, 5, W, 1, 10, 0); stepStatistics(state, 5, []); // A below threshold -> dominance lost
+  for (const r of [6, 7, 8]) { setBkt(g0, r, W, 9, 10, 6); setBkt(g1, r, W, 1, 10, 0); stepStatistics(state, r, []); }
+  check(domCount(state, 0) === 2, "DOMINANCE re-fires on a fresh rising edge after dominance was lost");
+}
+
+// (f) Regions: a cross-border trade is attributed to BOTH parties' regions, so
+//     the regional event sum legitimately exceeds the global count (§1, §9.3).
+{
+  const state = createState(scaledFixture(), FUNCTIONAL_SEED); // N=8, REGION_COUNT=2
+  const W = state.config.constants.WINDOW_ROUNDS;
+  // positions 0 and 4 are in different regions (arcs 0-3 and 4-7).
+  const trade: EngineEvent = { type: "TRADE", round: 1, proposer: 0, partner: 4, goodFromProposer: 0, goodFromPartner: 1, viaBridge: false };
+  writeBuckets(state, 1, [trade]);
+  const i = 1 % W;
+  const globalTot0 = state.goodStats[0]!.totBucket[i]!;
+  const region0Tot0 = state.regionGoodStats[0]![0]!.totBucket[i]!;
+  const region1Tot0 = state.regionGoodStats[1]![0]!.totBucket[i]!;
+  check(globalTot0 === 1, "the cross-border trade is one global event for good 0");
+  check(region0Tot0 === 1 && region1Tot0 === 1, "it is attributed to BOTH parties' regions");
+  check(region0Tot0 + region1Tot0 > globalTot0, "regional sums legitimately exceed the global count for a cross-border event (specified, not a defect)");
+}
+
+// (g) End-to-end: a full run to the cap produces per-round telemetry, and a
+//     non-converging market reports CAP_REACHED exactly once — a defined outcome
+//     (G3), never a soft win.
+{
+  const cap = 30;
+  const config: Config = { ...smallContrastFixture(), constants: { ...smallContrastFixture().constants, ROUND_CAP: cap } };
+  const state = createState(config, FUNCTIONAL_SEED);
+  runSetup(state);
+  for (let r = 1; r <= cap; r++) runRound(state);
+
+  check(state.telemetry.length === cap, "one telemetry snapshot per round");
+  for (const t of state.telemetry) {
+    check(Object.keys(t.acceptanceShare).length === state.goodCount, "telemetry reports A(g) for every good (incl. NO_EVIDENCE)");
+    check(Number.isFinite(t.flow.produced) && Number.isFinite(t.flow.tradeMoves), "telemetry carries goods-flow counts");
+  }
+  const capEvents = state.events.filter((e) => e.type === "CAP_REACHED");
+  check(capEvents.length === 1, "CAP_REACHED fires exactly once for a non-converging run");
+  check(state.reachedCap === true && state.dominantGood === null, "the run records reachedCap with no dominant good");
+
+  // Every score and every A(g) is a defined finite value through the whole run (G6).
+  const lastA = state.telemetry[cap - 1]!.acceptanceShare;
+  for (let g = 0; g < state.goodCount; g++) {
+    const v = lastA[g]!;
+    check(v === NO_EVIDENCE || Number.isFinite(v), "A(g) is always NO_EVIDENCE or a finite number (never an arbitrary value)");
+  }
+}
+
+console.log(`engine self-test OK — ${checks} checks passed (M1 setup; M2 mechanics; M3 trading; M4 statistics & detection).`);
