@@ -218,6 +218,8 @@ export type EngineEvent =
       readonly agent: number;
       readonly good: number;
       readonly wasFake: boolean;
+      /** Whether the victim's destroyed instance was acquired by trade (drives burn weighting). */
+      readonly acquiredByTrade: boolean;
     }
   | {
       readonly type: "FAKE_REVEAL";
@@ -225,6 +227,8 @@ export type EngineEvent =
       readonly agent: number;
       readonly good: number;
       readonly context: FakeContext;
+      /** Whether the victim's revealed instance was acquired by trade (drives burn weighting). */
+      readonly acquiredByTrade: boolean;
     }
   | { readonly type: "CONSUME"; readonly round: number; readonly agent: number; readonly good: number }
   | { readonly type: "FIRST_BRIDGE_ACCEPT"; readonly round: number; readonly good: number }
