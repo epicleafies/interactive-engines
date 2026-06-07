@@ -29,6 +29,7 @@
  */
 
 import { ringDistance } from "./ring.ts";
+import { isA1 } from "./ablation.ts";
 import type { AgentState, EngineStateInternal } from "./state.ts";
 import type { EngineEvent } from "./types.ts";
 
@@ -83,37 +84,49 @@ export function tallyUpdate(
   const burn = c.BURN_WEIGHT;
   const radius = c.WITNESS_RADIUS;
 
-  // 1. Decay every accumulator once (the only forgetting; D-021).
-  for (const a of state.agents) {
-    for (let g = 0; g < state.goodCount; g++) {
-      a.scorePos[g] = a.scorePos[g]! * decay;
-      a.scoreTot[g] = a.scoreTot[g]! * decay;
+  // A1 freezes the acceptance tally at the seeded prior: no decay, no events fold
+  // in, so every score stays equal to its prior. Trading still runs normally, so
+  // the §6.1 refusal memory still records and prunes (below).
+  const frozen = isA1(state.config);
+
+  // 1. Decay every accumulator once (the only forgetting; D-021) — unless frozen.
+  if (!frozen) {
+    for (const a of state.agents) {
+      for (let g = 0; g < state.goodCount; g++) {
+        a.scorePos[g] = a.scorePos[g]! * decay;
+        a.scoreTot[g] = a.scoreTot[g]! * decay;
+      }
     }
   }
 
-  // 2. Fold in this round's witnessed events.
+  // 2. Fold in this round's witnessed events (accumulator updates skipped when frozen;
+  //    the refusal memory is recorded either way).
   for (const e of roundEvents) {
     switch (e.type) {
       case "TRADE":
-        forWitnesses(state, [e.proposer, e.partner], radius, (a) => {
-          addPositive(a, e.goodFromProposer, 1);
-          addPositive(a, e.goodFromPartner, 1);
-        });
+        if (!frozen) {
+          forWitnesses(state, [e.proposer, e.partner], radius, (a) => {
+            addPositive(a, e.goodFromProposer, 1);
+            addPositive(a, e.goodFromPartner, 1);
+          });
+        }
         break;
       case "REFUSAL":
         forWitnesses(state, [e.proposer, e.partner], radius, (a) => {
-          addNegative(a, e.offeredGood, 1);
+          if (!frozen) addNegative(a, e.offeredGood, 1);
           // §6.1 memory: the refuser is the partner; key on (refuser, offered good).
           a.witnessedRefusals.push({ refuser: e.partner, offeredGood: e.offeredGood, round });
         });
         break;
       case "FAKE_REVEAL":
       case "SPOIL_DESTROY":
-        forWitnesses(state, [e.agent], radius, (a) => {
-          // The victim's own entry burns heavier iff the lost instance was trade-acquired.
-          const w = a.position === e.agent && e.acquiredByTrade ? burn : 1;
-          addNegative(a, e.good, w);
-        });
+        if (!frozen) {
+          forWitnesses(state, [e.agent], radius, (a) => {
+            // The victim's own entry burns heavier iff the lost instance was trade-acquired.
+            const w = a.position === e.agent && e.acquiredByTrade ? burn : 1;
+            addNegative(a, e.good, w);
+          });
+        }
         break;
       default:
         // PRODUCE, SPOIL_STAGE, CONSUME, DECISION_TRACE, and the §9 narration

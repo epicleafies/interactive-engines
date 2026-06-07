@@ -15,6 +15,7 @@
  * Run via `npm run engine-selftest`. Any failure throws and exits non-zero.
  */
 
+import { run } from "../engines/emergence/index.ts";
 import { ringDistance } from "../engines/emergence/ring.ts";
 import { createState, type EngineStateInternal } from "../engines/emergence/state.ts";
 import { runSetup, validateConfig } from "../engines/emergence/setup.ts";
@@ -30,7 +31,9 @@ import { selectPartner, evaluateAcceptance, stepTrading } from "../engines/emerg
 import { tallyUpdate } from "../engines/emergence/score.ts";
 import { stepStatistics, computeA, windowedTrades, writeBuckets } from "../engines/emergence/statistic.ts";
 import type { InstanceState, GoodStatState } from "../engines/emergence/state.ts";
-import { smallContrastFixture, tradingPairFixture, scaledFixture, singleGoodPerishableFixture, FIXTURE_CONSTANTS } from "../engines/emergence/fixtures.ts";
+import { smallContrastFixture, tradingPairFixture, scaledFixture, singleGoodPerishableFixture, pinningFixture, FIXTURE_CONSTANTS } from "../engines/emergence/fixtures.ts";
+import { unfilledConstants } from "../engines/emergence/constants.ts";
+import { runCampaign, type CampaignSpec, type TbdDeclaration } from "./campaign.ts";
 import { NONE, NO_EVIDENCE, type Config, type EngineEvent } from "../engines/emergence/types.ts";
 
 /** Directly set a good's rolling bucket for a round (white-box statistics tests). */
@@ -813,4 +816,136 @@ const domCount = (state: ReturnType<typeof detectorState>, good: number) =>
   check(state.events.some((e) => e.type === "CAP_REACHED"), "the run reaches the cap with a defined non-convergence outcome");
 }
 
-console.log(`engine self-test OK — ${checks} checks passed (M1 setup; M2 mechanics; M3 trading; M4 statistics & detection; D-029).`);
+// =========================================================================
+// M6 — ablation-mode smoke matrix. MECHANISM-level (each switch removes exactly
+// its mechanic); the "zero measurable effect on outcomes" claim is distributional
+// and runs with the statistical battery (criteria A1/A2 pending-with-note).
+// =========================================================================
+const ablationMatrix: string[] = [];
+function smoke(label: string, ok: boolean, detail: string): void {
+  check(ok, `${label}: ${detail}`);
+  ablationMatrix.push(`  ${ok ? "OK" : "XX"}  ${label.padEnd(22)} ${detail}`);
+}
+
+// A2:durability — no aging or spoilage. smallContrast's good 1 normally spoils.
+{
+  const r = run({ ...smallContrastFixture(), ablation: { kind: "A2", attribute: "durability" } }, FUNCTIONAL_SEED);
+  const spoils = r.events.filter((e) => e.type === "SPOIL_STAGE" || e.type === "SPOIL_DESTROY").length;
+  const baseline = run(smallContrastFixture(), FUNCTIONAL_SEED).events.filter((e) => e.type === "SPOIL_STAGE" || e.type === "SPOIL_DESTROY").length;
+  smoke("A2:durability", spoils === 0 && baseline > 0, "no aging transitions or spoilage (baseline spoils; ablated does not)");
+}
+
+// A2:recognizability — no fakes created. smallContrast's good 1 is fake-prone.
+{
+  const r = run({ ...smallContrastFixture(), ablation: { kind: "A2", attribute: "recognizability" } }, FUNCTIONAL_SEED);
+  const fakes = r.events.filter((e) => e.type === "FAKE_REVEAL").length + r.events.filter((e) => e.type === "SPOIL_DESTROY" && e.wasFake).length;
+  const baseFakes = run(smallContrastFixture(), FUNCTIONAL_SEED).events.filter((e) => e.type === "SPOIL_DESTROY" && e.wasFake).length;
+  smoke("A2:recognizability", fakes === 0 && baseFakes > 0, "no fakes created (baseline has fake exits; ablated has none)");
+}
+
+// A2:divisibility — the size table always passes (no divisibility refusals).
+{
+  const r = run({ ...smallContrastFixture(), ablation: { kind: "A2", attribute: "divisibility" } }, FUNCTIONAL_SEED);
+  const divRefusals = r.events.filter((e) => e.type === "REFUSAL" && e.reasons.includes("divisibility")).length;
+  const baseDiv = run(smallContrastFixture(), FUNCTIONAL_SEED).events.filter((e) => e.type === "REFUSAL" && e.reasons.includes("divisibility")).length;
+  smoke("A2:divisibility", divRefusals === 0 && baseDiv > 0, "divisibility table always passes (baseline has divisibility refusals; ablated has none)");
+}
+
+// A2:portability — reach is unrestricted (a far holder beyond normal reach is selectable).
+{
+  const mk = (abl: Config["ablation"]) => {
+    const s = createState({ ...smallContrastFixture(), ablation: abl }, FUNCTIONAL_SEED);
+    runSetup(s);
+    s.agents[0]!.held = instOf(1, 0); // good 1, reach 2
+    s.agents[0]!.want = 0;
+    for (let p = 1; p < s.agents.length; p++) s.agents[p]!.held = instOf(p === 5 ? 0 : 2, 0); // only pos 5 holds good 0, far away (dist 5)
+    return s;
+  };
+  const ablated = selectPartner(mk({ kind: "A2", attribute: "portability" }), 0, new Set<number>(), 2);
+  const normal = selectPartner(mk({ kind: "none" }), 0, new Set<number>(), 2);
+  smoke("A2:portability", ablated === 5 && normal !== 5, "reach unrestricted (ablated reaches the far holder pos 5; normal cannot)");
+}
+
+// A2:scarcity — production falls back to the profession policy regardless of weights.
+{
+  const weighted: Config = { ...tradingPairFixture(), productionPolicy: "weighted" };
+  const r = run({ ...weighted, ablation: { kind: "A2", attribute: "scarcity" } }, FUNCTIONAL_SEED);
+  // Under A2:scarcity every PRODUCE is the producing agent's homeGood (profession).
+  const homeOf = weighted.homeGoods!;
+  const offProfile = r.events.some((e) => e.type === "PRODUCE" && e.good !== homeOf[e.agent]);
+  const baseVaries = run(weighted, FUNCTIONAL_SEED).events.some((e) => e.type === "PRODUCE" && e.good !== homeOf[e.agent]);
+  smoke("A2:scarcity", !offProfile && baseVaries, "profession policy regardless of weights (baseline weighted draw varies; ablated is always homeGood)");
+}
+
+// A1 — BOTH halves: tallies frozen at the prior AND wants persist through consumption.
+{
+  const state = createState({ ...tradingPairFixture(), ablation: { kind: "A1" } }, FUNCTIONAL_SEED);
+  runSetup(state);
+  const initialWants = state.agents.map((a) => a.want);
+  const evStart = state.events.length;
+  for (let r = 0; r < 30; r++) runRound(state);
+  const consumed = state.events.slice(evStart).filter((e) => e.type === "CONSUME").length;
+
+  // Half 1: the accumulators never move off zero, so every score stays its prior.
+  let frozen = true;
+  for (const a of state.agents) for (let g = 0; g < state.goodCount; g++) if (a.scorePos[g] !== 0 || a.scoreTot[g] !== 0) frozen = false;
+  // Contrast: without A1 the same fixture moves some accumulator off zero.
+  const normal = createState(tradingPairFixture(), FUNCTIONAL_SEED);
+  runSetup(normal);
+  for (let r = 0; r < 30; r++) runRound(normal);
+  let normalMoved = false;
+  for (const a of normal.agents) for (let g = 0; g < normal.goodCount; g++) if (a.scoreTot[g] !== 0) normalMoved = true;
+  smoke("A1 (tallies frozen)", frozen && normalMoved, "score accumulators stay at zero = frozen at the prior (normal run moves them)");
+
+  // Half 2 (the one a partial impl misses): wants persist through consumption.
+  const wantsPersist = state.agents.every((a, i) => a.want === initialWants[i]);
+  smoke("A1 (wants pinned)", wantsPersist && consumed > 0, `wants persist through ${consumed} consumptions (no redraw)`);
+}
+
+// Rider #3 (explicit, once): ablation flags are CONFIG inputs, upstream of the
+// pinned trace — the pinned fixture runs on the default ablation:none path, and
+// setting it explicitly to none changes nothing. So ablations are not D-032-gated.
+{
+  const pf = pinningFixture();
+  const isNone = pf.ablation.kind === "none";
+  const a = JSON.stringify(run(pf, FUNCTIONAL_SEED).events);
+  const b = JSON.stringify(run({ ...pf, ablation: { kind: "none" } }, FUNCTIONAL_SEED).events);
+  smoke("default-off (none)", isNone && a === b, "the pin runs on ablation:none; setting none explicitly is byte-identical (config input, not D-032-gated)");
+}
+
+// M6 forward item — C0 campaign-runner machinery smoke (no tuning, no numbers).
+{
+  const base = smallContrastFixture();
+  const c = base.constants as unknown as Record<string, number>;
+  // Declare every registry-TBD constant at its structural-fixture value, authorized
+  // by D-023 (NOT a teaching parameter). A real campaign cites real C0/H6 entries.
+  const decls: TbdDeclaration[] = unfilledConstants().map((name) => ({
+    constant: name,
+    value: c[name]!,
+    registerEntry: "D-023 (structural-fixture value; not a teaching parameter)",
+  }));
+  const spec: CampaignSpec = {
+    name: "machinery-smoke",
+    base,
+    axes: [{ name: "ROUND_CAP", values: [15, 25], apply: (cfg, v) => ({ ...cfg, constants: { ...cfg.constants, ROUND_CAP: v as number } }) }],
+    seedsPerConfig: 4,
+    baseSeed: FUNCTIONAL_SEED,
+    metrics: [
+      { name: "events", extract: (r) => r.events.length },
+      { name: "converged", extract: (r) => (r.dominantGood === null ? 0 : 1) },
+    ],
+    tbdDeclarations: decls,
+    passPredicate: (r) => r.reachedCap,
+  };
+  const report = runCampaign(spec);
+  check(report.cells.length === 2, "campaign sweeps the axis into 2 cells");
+  for (const cell of report.cells) {
+    check(cell.seeds === 4 && cell.metrics.events!.n === 4, "each cell runs an N-seed batch and summarizes distributionally (H2)");
+    check(cell.passRate !== undefined && cell.passRate.total === 4, "a per-cell pass-rate is computed over the batch");
+  }
+  // H6 gate: drop one TBD declaration and the runner refuses to start.
+  throws(() => runCampaign({ ...spec, tbdDeclarations: decls.slice(1) }), "the H6 intake refuses to run a campaign with an undeclared TBD constant");
+}
+
+console.log(`engine self-test OK — ${checks} checks passed (M1-M4; D-029; M6 ablations + campaign shell).`);
+console.log("ablation smoke matrix:\n" + ablationMatrix.join("\n"));

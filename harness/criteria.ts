@@ -92,18 +92,21 @@ const A: Assertion[] = [
   campaignCriterion(
     "A1",
     "A1 — Tally ablation",
-    "With acceptance-tally learning frozen after seeding and wants pinned to their initial draw, " +
-      "convergence must degrade by at least the registered minimum. If the market still converges at " +
-      "full strength, the convergence was baked into the static demand structure, not produced by the " +
-      "acceptance dynamics the simulation claims to demonstrate.",
+    "With acceptance-tally learning frozen after seeding and wants pinned to their initial draw, convergence " +
+      "must degrade by at least the registered minimum — otherwise convergence was baked into the static demand " +
+      "structure. The A1 MODE itself (tallies frozen at the prior AND wants persisting through consumption) is " +
+      "smoke-tested at M6 (engine self-test); the convergence-degradation grading is distributional and runs " +
+      "with the statistical battery (threshold is an H6 TBD).",
   ),
-  engineCriterion(
+  campaignCriterion(
     "A2",
     "A2 — Mechanic ablation, per property",
     "For each property with a mechanical effect (durability, recognizability, divisibility, portability, " +
-      "scarcity): disabling the mechanic while leaving the displayed level set must make that level have " +
-      "zero measurable effect on outcomes. Properties act ONLY through their named mechanics; no hidden " +
-      "score reads a property level directly.",
+      "scarcity): disabling the mechanic while leaving the displayed level set must give that level zero " +
+      "measurable effect on outcomes. Each switch's MECHANISM removal is smoke-tested at M6 (engine self-test " +
+      "ablation matrix: durability off -> no aging; recognizability off -> no fakes; divisibility off -> table " +
+      "always passes; portability off -> reach unrestricted; scarcity off -> profession policy). The " +
+      "zero-measurable-effect-on-outcomes claim is distributional and runs with the statistical battery.",
   ),
   engineCriterion(
     "A3",

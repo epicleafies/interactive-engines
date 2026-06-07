@@ -28,6 +28,7 @@ import { stageOf } from "./durability.ts";
 import { sizeCompatible } from "./divisibility.ts";
 import { shuffleOrder } from "./rng.ts";
 import { scoreOf } from "./score.ts";
+import { isA2 } from "./ablation.ts";
 import { NONE, type BridgeQualifier, type RefusalReason } from "./types.ts";
 import type { AgentState, EngineStateInternal, InstanceState } from "./state.ts";
 
@@ -65,7 +66,8 @@ export function evaluateAcceptance(
   const valueTestPass = offeredIsWant || scoreOf(partner, gO, k) > scoreOf(partner, gP, k) + eps;
   const offeredStale = stageOf(offered.age, scheduleOf(config, gO)) === "stale";
   const conditionPass = offeredIsWant || !offeredStale;
-  const divisibilityPass = sizeCompatible(sizeClassOf(config, gO), sizeClassOf(config, gP));
+  // A2:divisibility disables the mechanic — the table always passes, so the divisibility level has no effect.
+  const divisibilityPass = isA2(config, "divisibility") || sizeCompatible(sizeClassOf(config, gO), sizeClassOf(config, gP));
 
   const accept = valueTestPass && conditionPass && divisibilityPass;
   const reasons: RefusalReason[] = [];
@@ -124,13 +126,16 @@ export function selectPartner(
   const reachA = reachOf(config, gA);
 
   // Reachable, available neighbours (mutual reach depends on both held goods).
+  // A2:portability disables the reach mechanic — every neighbour is reachable, so
+  // the portability level has no effect.
+  const reachUnrestricted = isA2(config, "portability");
   const cands: Candidate[] = [];
   for (let b = 0; b < n; b++) {
     if (b === posA || completed.has(b)) continue;
     const B = state.agents[b]!;
     if (B.held === null) continue;
     const gB = B.held.type;
-    if (reachEligible(posA, b, n, reachA, reachOf(config, gB))) {
+    if (reachUnrestricted || reachEligible(posA, b, n, reachA, reachOf(config, gB))) {
       cands.push({ pos: b, good: gB, dist: ringDistance(posA, b, n) });
     }
   }

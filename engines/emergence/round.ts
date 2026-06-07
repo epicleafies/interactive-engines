@@ -28,6 +28,7 @@ import { categorical } from "./rng.ts";
 import { stepTrading } from "./decide.ts";
 import { tallyUpdate } from "./score.ts";
 import { stepStatistics } from "./statistic.ts";
+import { isA1, isA2 } from "./ablation.ts";
 import { NONE } from "./types.ts";
 import type { EngineStateInternal, InstanceState } from "./state.ts";
 
@@ -74,6 +75,9 @@ export function stepFakeReveals(state: EngineStateInternal, round: number): void
  * channel (with the wasFake tag), because observers saw rot, not fraud.
  */
 export function stepAging(state: EngineStateInternal, round: number): void {
+  // A2:durability disables the durability mechanic — instances never age or
+  // spoil, so the durability level has no effect.
+  if (isA2(state.config, "durability")) return;
   for (let pos = 0; pos < state.agents.length; pos++) {
     const a = state.agents[pos]!;
     const held = a.held;
@@ -126,7 +130,7 @@ export function stepProduction(state: EngineStateInternal, round: number): void 
  * redrawing (and consumes no draw).
  */
 export function stepConsumption(state: EngineStateInternal, round: number): void {
-  const isA1 = state.config.ablation.kind === "A1";
+  const wantsPinned = isA1(state.config); // A1 pins wants at the initial draw — no redraw
   for (let pos = 0; pos < state.agents.length; pos++) {
     const a = state.agents[pos]!;
     const held: InstanceState | null = a.held;
@@ -148,7 +152,7 @@ export function stepConsumption(state: EngineStateInternal, round: number): void
       state.events.push({ type: "CONSUME", round, agent: a.position, good: held.type });
       exitInstance(state, held.type, "consumed");
       a.held = null;
-      if (!isA1) {
+      if (!wantsPinned) {
         const dist = wantDistribution(state.config, a.homeGood);
         a.want = dist === null ? NONE : categorical(state.rng, dist);
       }

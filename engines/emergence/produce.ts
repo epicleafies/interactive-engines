@@ -16,6 +16,7 @@
 
 import { bernoulli, categorical } from "./rng.ts";
 import { fakeProbOf } from "./lookup.ts";
+import { isA2 } from "./ablation.ts";
 import type { AgentState, EngineStateInternal } from "./state.ts";
 
 /**
@@ -28,7 +29,9 @@ export function produceFor(state: EngineStateInternal, agent: AgentState, round:
   const { config } = state;
 
   let type: number;
-  if (config.productionPolicy === "profession") {
+  // A2:scarcity disables the scarcity mechanic — production falls back to the
+  // profession policy regardless of the configured weights.
+  if (config.productionPolicy === "profession" || isA2(config, "scarcity")) {
     type = agent.homeGood;
   } else {
     // weighted: draw a type tilted by scarcity production weights over all goods.
@@ -40,7 +43,9 @@ export function produceFor(state: EngineStateInternal, agent: AgentState, round:
     type = categorical(state.rng, probs);
   }
 
-  const isFake = bernoulli(state.rng, fakeProbOf(config, type));
+  // A2:recognizability disables fake creation — no instance is ever fake (and
+  // the fake Bernoulli is not drawn), so the recognizability level has no effect.
+  const isFake = isA2(config, "recognizability") ? false : bernoulli(state.rng, fakeProbOf(config, type));
   agent.held = { type, age: 0, isFake, acquiredByTrade: false, acquiredRound: null };
   agent.emptyRounds = 0;
 
