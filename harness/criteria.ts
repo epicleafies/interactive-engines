@@ -20,7 +20,7 @@
  */
 
 import type { Assertion, AssertionResult, HarnessContext } from "./assert.ts";
-import { pass, fail, pending, blocked } from "./assert.ts";
+import { pass, fail, pending } from "./assert.ts";
 import { makeRunRecord } from "./replay.ts";
 import { CRITERIA_VERSION, ENGINE_VERSION } from "./version.ts";
 import {
@@ -28,10 +28,11 @@ import {
   ALLOWED_THRESHOLD_DENOMINATIONS,
   type Denomination,
 } from "../engines/emergence/constants.ts";
-import { TALLY_EVENT_TYPES, type EventType, type SizeClass, type EngineEvent, type Config } from "../engines/emergence/types.ts";
+import { TALLY_EVENT_TYPES, type EventType, type SizeClass } from "../engines/emergence/types.ts";
 import { sizeCompatible } from "../engines/emergence/divisibility.ts";
 import { stageOf } from "../engines/emergence/durability.ts";
 import { ringDistance, mutualReachRadius, reachEligible } from "../engines/emergence/ring.ts";
+import { fakeProbOf, scheduleOf, sizeClassOf, reachOf, wantShareOf } from "../engines/emergence/lookup.ts";
 import { auditEnginePurity } from "./purity.ts";
 import {
   run,
@@ -53,60 +54,6 @@ import { refereeVerdict } from "./referee.ts";
  * PROJECT_SEED pinned trace is a separate, dedicated assertion.
  */
 const STRUCTURAL_SEED = 20260607;
-
-/** Map a good id through a permutation, leaving NONE (-1) and nulls untouched. */
-function permGood(g: number, perm: readonly number[]): number {
-  return g < 0 ? g : perm[g]!;
-}
-
-/** Relabel every good-typed field of an event through `perm` (A8 support). Positions are untouched. */
-function relabelEvent(e: EngineEvent, perm: readonly number[]): EngineEvent {
-  switch (e.type) {
-    case "PRODUCE":
-    case "SPOIL_STAGE":
-    case "SPOIL_DESTROY":
-    case "FAKE_REVEAL":
-    case "CONSUME":
-    case "DOMINANCE":
-    case "FILLER_PROMOTED":
-    case "REGION_LEADER":
-    case "REGIONS_MERGED":
-      return { ...e, good: perm[e.good]! };
-    case "TRADE":
-      return { ...e, goodFromProposer: perm[e.goodFromProposer]!, goodFromPartner: perm[e.goodFromPartner]! };
-    case "REFUSAL":
-      return { ...e, offeredGood: perm[e.offeredGood]! };
-    case "LEAD_CHANGE":
-      return { ...e, from: e.from === null ? null : perm[e.from]!, to: perm[e.to]! };
-    case "FIRST_BRIDGE_ACCEPT":
-      return { ...e, qualifiers: e.qualifiers.map((q) => ({ ...q, acquiredGood: perm[q.acquiredGood]! })) };
-    case "DECISION_TRACE":
-      return {
-        ...e,
-        inputs: {
-          ...e.inputs,
-          offeredGood: perm[e.inputs.offeredGood as number]!,
-          heldGood: perm[e.inputs.heldGood as number]!,
-          want: permGood(e.inputs.want as number, perm),
-        },
-      };
-    case "CAP_REACHED":
-      return e;
-  }
-}
-
-/** Permute a config's homeGoods, wants, and focal ids through `perm` (A8 support). */
-function permuteConfig(cfg: Config, perm: readonly number[]): Config {
-  const homeGoods = cfg.homeGoods!.map((h) => perm[h]!);
-  const focalGoodIds = cfg.focalGoodIds.map((g) => perm[g]!);
-  const base: Config = { ...cfg, homeGoods, focalGoodIds };
-  if (cfg.pinnedWants) {
-    const pinned: Record<number, number> = {};
-    for (const [pos, w] of Object.entries(cfg.pinnedWants)) pinned[Number(pos)] = permGood(w as number, perm);
-    return { ...base, pinnedWants: pinned };
-  }
-  return base;
-}
 
 // --- Stage reasons -------------------------------------------------------
 
@@ -273,40 +220,66 @@ const A: Assertion[] = [
       "destroy its candidacy, not because a rule disqualifies it before events can answer.",
   ),
   {
-    id: "A8",
-    criterion: "A8 — Same label, same mechanics (relabel-equivariance)",
+    id: "A8.mapping",
+    criterion: "A8(a) — Same label, same mechanics (mapping audit, per D-031)",
     claim:
-      "Two goods with identical level profiles are mechanically identical: swapping them everywhere — the goods, " +
-      "the homeGoods, the wants — at a fixed seed yields the identical event stream up to the swap. A rigged " +
-      "number beneath an identical label would break this. Checked on the two all-middle filler goods (2 and 3).",
+      "Every engine parameter a good carries — fake probability, durability schedule, size class, reach radius, " +
+      "want-share weight — is exactly the registered level mapping indexed by that good's level, with NO per-good " +
+      "adjustment beneath the label. So two goods at the same level get identical parameter packs. (A8's original " +
+      "fixed-seed relabel-equivariance was ruled unsatisfiable for any deterministic engine — D-031.)",
     evaluate: (): AssertionResult => {
-      // smallContrast goods 2 and 3 are identical all-middle fillers; swap them.
-      const cfg = smallContrastFixture();
-      const perm = [0, 1, 3, 2];
-      const swapped = permuteConfig(cfg, perm);
-
-      // BLOCKED — D-012 escalation (surfaced building this check). Criteria A8's
-      // literal "identical event stream up to the relabeling" cannot hold for the
-      // engine as specified: index-order categorical sampling (the want draw,
-      // D-022) and the lowest-type-index tie-break (§6.1) are NOT
-      // permutation-equivariant for two equal-weight goods — for a fixed u the
-      // relabeled draw selects the SAME index, not the permuted one (verified:
-      // u=0.75 selects good 2 in both base and swapped, but the relabeling maps
-      // 2->3). So D-022's claim that "index-order iteration is
-      // label-permutation-equivariant, so A8's relabel audit survives" is
-      // incorrect for the exact-event-stream reading. Recommended resolution:
-      // re-form A8 as a STRUCTURAL audit (the level->parameter mapping is keyed by
-      // level, never by good id, so two same-level goods get identical parameter
-      // packs) plus a DISTRIBUTIONAL outcome-swap (win rates swap at the same
-      // rate, A5-style) — both achievable — and drop the literal event-stream
-      // equivariance. Awaiting a register ruling; not hacked green.
-      void cfg; void perm; void swapped; void relabelEvent; void permuteConfig;
-      return blocked(
-        "A8's exact 'identical event stream up to relabeling' is unsatisfiable under D-022's index-order " +
-          "sampling / lowest-index tie-break (not permutation-equivariant for equal-weight goods); awaiting a " +
-          "ruling to re-form A8 as a structural mapping audit + distributional outcome-swap.",
-      );
+      let checked = 0;
+      for (const f of structuralFixtures()) {
+        const cfg = f.config;
+        const m = cfg.mapping;
+        for (const g of cfg.goods) {
+          const at = g.attributes;
+          checked++;
+          if (fakeProbOf(cfg, g.id) !== m.fakeProbability[at.recognizability]) return fail(`${f.name} good ${g.id}: fake prob not the level mapping`);
+          if (JSON.stringify(scheduleOf(cfg, g.id)) !== JSON.stringify(m.durabilitySchedule[at.durability])) return fail(`${f.name} good ${g.id}: schedule not the level mapping`);
+          if (sizeClassOf(cfg, g.id) !== m.sizeClass[at.divisibility]) return fail(`${f.name} good ${g.id}: size class not the level mapping`);
+          if (reachOf(cfg, g.id) !== m.reachRadius[at.portability]) return fail(`${f.name} good ${g.id}: reach not the level mapping`);
+          if (wantShareOf(cfg, g.id) !== m.wantShareWeight[at.desirability]) return fail(`${f.name} good ${g.id}: want-share not the level mapping`);
+        }
+      }
+      return pass(`every good's parameter pack is the registered mapping indexed by level (${checked} goods, no per-good adjustment)`, { checked });
     },
+  },
+  {
+    id: "A8.blindness",
+    criterion: "A8(b) — Identity-blindness (code audit anchored on A8(a), per D-031)",
+    claim:
+      "Good identity enters no decision, weight, or parameter except through the level mapping (A8(a)) and the " +
+      "registered symmetry-breaking conventions (the type-index draw order and the lowest-type-index tie-break, " +
+      "D-015/D-022). Mechanical anchor: any two goods with IDENTICAL full profiles carry byte-identical parameter " +
+      "packs everywhere they appear — a rigged per-id number would break this even where it hides behind matching labels.",
+    evaluate: (): AssertionResult => {
+      for (const f of structuralFixtures()) {
+        const cfg = f.config;
+        for (const a of cfg.goods) {
+          for (const b of cfg.goods) {
+            if (a.id >= b.id) continue;
+            if (JSON.stringify(a.attributes) !== JSON.stringify(b.attributes)) continue; // only identical profiles
+            const packA = [fakeProbOf(cfg, a.id), JSON.stringify(scheduleOf(cfg, a.id)), sizeClassOf(cfg, a.id), reachOf(cfg, a.id), wantShareOf(cfg, a.id)];
+            const packB = [fakeProbOf(cfg, b.id), JSON.stringify(scheduleOf(cfg, b.id)), sizeClassOf(cfg, b.id), reachOf(cfg, b.id), wantShareOf(cfg, b.id)];
+            if (JSON.stringify(packA) !== JSON.stringify(packB)) {
+              return fail(`${f.name}: goods ${a.id} and ${b.id} have identical profiles but different parameter packs`);
+            }
+          }
+        }
+      }
+      return pass("identically-profiled goods carry identical parameter packs everywhere; identity enters only via mapping + registered conventions");
+    },
+  },
+  {
+    id: "A8.distributional",
+    criterion: "A8(c) — Distributional relabel swap (per D-031)",
+    claim:
+      "A same-level pair's OUTCOME statistics swap under relabeling within a registered tolerance (A5 machinery; " +
+      "the deterministic event stream cannot match exactly — D-031 — but the distribution must). This runs with " +
+      "the statistical battery alongside A1/A5/A7; the tolerance is an H6 TBD, filled before its campaign.",
+    evaluate: (): AssertionResult =>
+      pending("A8(c) distributional outcome-swap runs with the A1/A5/A7 statistical battery; tolerance is an H6 TBD (per D-031)"),
   },
   {
     id: "A9",
