@@ -181,6 +181,16 @@ export interface EngineConstants {
 
 export type RefusalReason = "judgment" | "stale" | "divisibility";
 
+/** A party that, in a completed trade, acquired a good that was not its current want (D-028). */
+export type BridgeRole = "proposer" | "accepter";
+export type BridgeQualification = "tally-clause acceptance" | "bridge-targeted acquisition";
+export interface BridgeQualifier {
+  readonly party: number; // agent position
+  readonly role: BridgeRole;
+  readonly acquiredGood: number;
+  readonly qualification: BridgeQualification;
+}
+
 /** Where a fake was revealed: the round after a trade, or on attempted consumption. */
 export type FakeContext = "trade" | "consume";
 
@@ -199,7 +209,13 @@ export type EngineEvent =
       readonly partner: number;
       readonly goodFromProposer: number;
       readonly goodFromPartner: number;
-      /** True when the proposer's value test passed via the tally clause, not the want clause. */
+      /**
+       * True when the ACCEPTER took the offered good via the tally (bridge)
+       * clause rather than the want clause — i.e. the offered good was not the
+       * accepter's want, so its acceptance tally alone carried the trade. This
+       * is the "accepted as an intermediary" signal `FIRST_BRIDGE_ACCEPT` keys
+       * off, regardless of which priority the proposer used.
+       */
       readonly viaBridge: boolean;
     }
   | {
@@ -231,7 +247,18 @@ export type EngineEvent =
       readonly acquiredByTrade: boolean;
     }
   | { readonly type: "CONSUME"; readonly round: number; readonly agent: number; readonly good: number }
-  | { readonly type: "FIRST_BRIDGE_ACCEPT"; readonly round: number; readonly good: number }
+  | {
+      /**
+       * Once per run, on the first completed trade in which at least one party
+       * acquires a good that is not its current want — the run's first
+       * intermediary acquisition (D-028). The payload names every qualifying
+       * party (accepter via tally-clause acceptance; proposer via
+       * bridge-targeted acquisition); if both qualify, one event carries both.
+       */
+      readonly type: "FIRST_BRIDGE_ACCEPT";
+      readonly round: number;
+      readonly qualifiers: readonly BridgeQualifier[];
+    }
   | { readonly type: "LEAD_CHANGE"; readonly round: number; readonly from: number | null; readonly to: number }
   | { readonly type: "REGION_LEADER"; readonly round: number; readonly region: number; readonly good: number }
   | { readonly type: "REGIONS_MERGED"; readonly round: number; readonly good: number }

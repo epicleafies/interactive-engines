@@ -114,3 +114,35 @@ export function smallContrastFixture(): Config {
     constants: FIXTURE_CONSTANTS,
   };
 }
+
+/**
+ * `tradingPair` — a deliberately LIVE market for exercising the trade path
+ * (steps 4/6). Coverage it exists for: TRADE execution, the instance swap,
+ * consume-after-trade and re-endowment, and the one-trade-per-round invariant.
+ *
+ * It is a no-filler two-good ring — an artificial sealed market, the kind the
+ * spec calls out as the unnatural construction — chosen ONLY so trades reliably
+ * fire: alternating producers of good 0 and good 1, both goods fine-divisible,
+ * never-spoiling, recognizable (no fakes), and full-reach. With no fillers, each
+ * agent's want redistribution falls through to the other focal good (D-025b), so
+ * good-0 producers always want good 1 and vice versa — a standing double
+ * coincidence. This is a structural fixture (D-023): NOT a teaching parameter,
+ * never cited for any C/D/E claim. FILLER_MIN_SHARE = 0 here is non-canonical.
+ */
+export function tradingPairFixture(): Config {
+  const focal = (id: number, label: string): GoodType =>
+    // desirability low (mapped to 0.5 below), never spoils, anyone can tell,
+    // any-amount divisible, travels light, scarcity middle.
+    good(id, label, false, [0, 2, 2, 2, 2, 1]);
+  return {
+    mode: "small",
+    ablation: { kind: "none" },
+    ringSize: 6,
+    goods: [focal(0, "good-0"), focal(1, "good-1")],
+    focalGoodIds: [0, 1],
+    mapping: { ...FIXTURE_MAPPING, wantShareWeight: [0.5, 0.5, 0.5] },
+    productionPolicy: "profession",
+    homeGoods: [0, 1, 0, 1, 0, 1],
+    constants: { ...FIXTURE_CONSTANTS, FILLER_MIN_SHARE: 0 },
+  };
+}
