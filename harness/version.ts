@@ -11,10 +11,12 @@
 
 /**
  * The reference engine's version. Bumped on any change that can alter an event
- * stream at a fixed seed. `0.0.0-skeleton` marks the pre-engine state: the
- * harness skeleton exists, the reference engine does not yet.
+ * stream at a fixed seed. `0.5.0` marks the reference engine implemented through
+ * spec v3.1 §1–§9 (setup, the seven-step round, statistics/detection) with the
+ * D-021/D-022/D-028/D-029 rulings folded in; harness criteria wiring and the
+ * A-series validation are in progress.
  */
-export const ENGINE_VERSION = "0.0.0-skeleton";
+export const ENGINE_VERSION = "0.5.0";
 
 /**
  * The acceptance-criteria document this harness asserts against. Matches the

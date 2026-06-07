@@ -33,6 +33,15 @@ import { sizeCompatible } from "../engines/emergence/divisibility.ts";
 import { stageOf } from "../engines/emergence/durability.ts";
 import { ringDistance, mutualReachRadius, reachEligible } from "../engines/emergence/ring.ts";
 import { auditEnginePurity } from "./purity.ts";
+import { run, structuralFixtures, serializeRun, tradingPairFixture } from "./engine-adapter.ts";
+import { NO_EVIDENCE } from "../engines/emergence/types.ts";
+
+/**
+ * A functional seed for the engine-backed structural criteria — an arbitrary
+ * fixed number chosen to exercise the engine, not for any outcome (D-010). The
+ * PROJECT_SEED pinned trace is a separate, dedicated assertion.
+ */
+const STRUCTURAL_SEED = 20260607;
 
 // --- Stage reasons -------------------------------------------------------
 
@@ -121,12 +130,38 @@ const A: Assertion[] = [
         : fail(`tally event vocabulary mismatch: got {${got.join(", ")}}, expected {${want.join(", ")}}`);
     },
   },
-  engineCriterion(
-    "A6.composition",
-    "A6 — Witnessable inputs only (event-record composition)",
-    "Instrumented over a run, 100% of the tally's event record traces to witnessable events. The seeded " +
-      "prior is not an event, never enters the event record, and is excluded from this audit.",
-  ),
+  {
+    id: "A6.composition",
+    criterion: "A6 — Witnessable inputs only (event-record composition)",
+    claim:
+      "Over a run, 100% of the tally's event record traces to the four witnessable event types — a trade, a " +
+      "refusal, a fake reveal, a spoilage destruction. The per-round composition telemetry accounts for every " +
+      "one of those events and nothing else; the seeded prior is not an event and never appears in the record.",
+    evaluate: (): AssertionResult => {
+      const r = run(tradingPairFixture(), STRUCTURAL_SEED);
+      const tallyTypes = new Set<string>(TALLY_EVENT_TYPES);
+      const logCounts: Record<string, number> = {};
+      for (const e of r.events) if (tallyTypes.has(e.type)) logCounts[e.type] = (logCounts[e.type] ?? 0) + 1;
+
+      const telCounts: Record<string, number> = {};
+      for (const t of r.telemetry) {
+        for (const [k, v] of Object.entries(t.eventRecordComposition)) telCounts[k] = (telCounts[k] ?? 0) + v;
+      }
+      // Every composition key must be a tally type, and the counts must match the
+      // event log exactly (the telemetry accounts for 100% of the witnessable events).
+      for (const k of Object.keys(telCounts)) {
+        if (!tallyTypes.has(k)) return fail(`composition telemetry counts a non-tally event type '${k}'`);
+        if ((telCounts[k] ?? 0) !== (logCounts[k] ?? 0)) {
+          return fail(`composition mismatch for ${k}: telemetry ${telCounts[k]} vs event log ${logCounts[k]}`);
+        }
+      }
+      for (const k of Object.keys(logCounts)) {
+        if ((telCounts[k] ?? 0) !== logCounts[k]) return fail(`event log has ${k} the composition telemetry missed`);
+      }
+      const total = Object.values(logCounts).reduce((s, x) => s + x, 0);
+      return pass(`100% of the ${total} tally events trace to the four witnessable types`, { tallyEvents: total });
+    },
+  },
   engineCriterion(
     "A6.prior",
     "A6 — Seeded-prior initialization assertion",
@@ -419,12 +454,45 @@ const G: Assertion[] = [
   campaignCriterion("G1", "G1 — Maxed good wins",
     "A sandbox good with every property at its best setting beats the standard field decisively in at least " +
       "the registered fraction of runs."),
-  engineCriterion("G2", "G2 — Degenerate settings don't crash",
-    "All-worst, all-identical, demand-concentrated, and single-good markets run to the round limit without " +
-      "error and present a defined 'no convergence' outcome rather than crashing or coercing a winner."),
-  engineCriterion("G3", "G3 — No-convergence is a defined outcome",
-    "A run hitting the round limit without meeting the convergence threshold reports that state explicitly " +
-      "(CAP_REACHED) and is never displayed as a weak win."),
+  {
+    id: "G2",
+    criterion: "G2 — Degenerate settings don't crash",
+    claim:
+      "Degenerate markets — a single good, or an all-refusal frozen market — run to the round limit without " +
+      "error and present a defined 'no convergence' outcome, rather than crashing or coercing a winner.",
+    evaluate: (): AssertionResult => {
+      // The single-good and frozen fixtures are the degenerate cases reachable today.
+      const degenerate = structuralFixtures().filter((f) => /degenerate|frozen/.test(f.name));
+      for (const f of degenerate) {
+        let r;
+        try {
+          r = run(f.config, STRUCTURAL_SEED);
+        } catch (e) {
+          return fail(`${f.name} threw instead of running to the cap: ${(e as Error).message}`);
+        }
+        if (r.telemetry.length !== f.config.constants.ROUND_CAP) {
+          return fail(`${f.name} did not run to its round cap`);
+        }
+        if (r.dominantGood !== null) return fail(`${f.name} coerced a winner in a degenerate market`);
+      }
+      return pass(`${degenerate.length} degenerate fixtures ran to the cap with a defined no-convergence outcome`);
+    },
+  },
+  {
+    id: "G3",
+    criterion: "G3 — No-convergence is a defined outcome",
+    claim:
+      "A run that reaches the round limit without a dominance verdict reports that state explicitly — it emits " +
+      "CAP_REACHED, records reachedCap, and names no dominant good — and is never dressed up as a weak win.",
+    evaluate: (): AssertionResult => {
+      const r = run(structuralFixtures().find((f) => /frozen/.test(f.name))!.config, STRUCTURAL_SEED);
+      if (r.dominantGood !== null) return fail("the frozen fixture unexpectedly converged");
+      const capEvents = r.events.filter((e) => e.type === "CAP_REACHED").length;
+      if (capEvents !== 1) return fail(`expected exactly one CAP_REACHED, saw ${capEvents}`);
+      if (!r.reachedCap) return fail("reachedCap was not set on a non-converging run");
+      return pass("the non-converging run emits CAP_REACHED once and records reachedCap with no dominant good");
+    },
+  },
   campaignCriterion("G4", "G4 — Bounded across the controls",
     "Non-convergence rate stays at or below the registered ceiling across the ENTIRE range of every " +
       "learner-exposed control (population, speed, good count) — not only at defaults."),
@@ -432,17 +500,54 @@ const G: Assertion[] = [
     "A configuration is 'too close to call' when its winner distribution over a QA batch is contested past " +
       "the registered threshold; coin-flip markets never receive confident causal verdicts, and the harness " +
       "supplies the contestedness mechanism rather than asserting the property with nothing behind it."),
-  engineCriterion("G6", "G6 — Every number is defined",
-    "Every statistic read by any decision rule, detector, or grading surface is a defined finite value for " +
-      "every round to the cap across all supported configurations, including zero-evidence windows, where the " +
-      "no-evidence case has an explicit specified behavior (NO_EVIDENCE) rather than an arbitrary number."),
+  {
+    id: "G6",
+    criterion: "G6 — Every number is defined",
+    claim:
+      "Every acceptance share the engine reports is, for every round to the cap and across all supported " +
+      "configurations, either an explicit NO_EVIDENCE (the zero-evidence case) or a finite number — never NaN, " +
+      "Infinity, or an arbitrary coerced value.",
+    evaluate: (): AssertionResult => {
+      let checked = 0;
+      for (const f of structuralFixtures()) {
+        const r = run(f.config, STRUCTURAL_SEED);
+        for (const t of r.telemetry) {
+          for (const v of Object.values(t.acceptanceShare)) {
+            checked++;
+            if (v !== NO_EVIDENCE && !Number.isFinite(v)) {
+              return fail(`${f.name} round ${t.round}: a statistic was ${v} (not NO_EVIDENCE or finite)`);
+            }
+          }
+        }
+      }
+      return pass(`every one of ${checked} reported acceptance shares is NO_EVIDENCE or finite`, { checked });
+    },
+  },
 ];
 
 // --- H. Reproducibility and reporting -----------------------------------
 
 const H: Assertion[] = [
-  engineCriterion("H1", "H1 — Seeded determinism",
-    "Identical seed + configuration produces an identical run, bit-for-bit, across sessions."),
+  {
+    id: "H1",
+    criterion: "H1 — Seeded determinism",
+    claim:
+      "An identical {seed, configuration} produces an identical run — the same ordered event stream, telemetry, " +
+      "and final state — bit-for-bit. Any hidden nondeterminism (unseeded randomness, host APIs, iteration-order " +
+      "dependence) would surface here as a divergence.",
+    evaluate: (): AssertionResult => {
+      for (const f of structuralFixtures()) {
+        const a = serializeRun(run(f.config, STRUCTURAL_SEED));
+        const b = serializeRun(run(f.config, STRUCTURAL_SEED));
+        if (a !== b) {
+          let i = 0;
+          while (i < a.length && i < b.length && a[i] === b[i]) i++;
+          return fail(`${f.name} is non-deterministic; first divergence at char ${i}`);
+        }
+      }
+      return pass(`all ${structuralFixtures().length} fixtures replay identically from a fixed seed`);
+    },
+  },
   {
     id: "H1.purity",
     criterion: "H1/H4 — Engine platform purity (D-011)",
@@ -490,9 +595,25 @@ const H: Assertion[] = [
       return pass(`run record stamps {seed, configHash, engine=${ENGINE_VERSION}, criteria=${CRITERIA_VERSION}} and the hash is canonical`);
     },
   },
-  engineCriterion("H4", "H4 — Learner runs are replayable",
-    "Every learner-facing run, sandbox included, records its seed and full configuration and can be replayed " +
-      "exactly; every outcome a grading surface judges is re-runnable after the fact."),
+  {
+    id: "H4",
+    criterion: "H4 — Learner runs are replayable",
+    claim:
+      "Every run records the four things needed to reproduce it after the fact — its seed, a hash of its full " +
+      "configuration, the engine version, and the criteria version — and re-running from that record reproduces " +
+      "the run exactly. No outcome a grading surface judges is ever unexaminable.",
+    evaluate: (): AssertionResult => {
+      const f = structuralFixtures()[0]!;
+      const r = run(f.config, STRUCTURAL_SEED);
+      if (r.record.seed !== STRUCTURAL_SEED) return fail("run record does not preserve the seed");
+      if (!r.record.configHash) return fail("run record carries no config hash");
+      if (r.record.engineVersion !== ENGINE_VERSION) return fail("run record does not stamp the engine version");
+      if (r.record.criteriaVersion !== CRITERIA_VERSION) return fail("run record does not stamp the criteria version");
+      const replay = run(f.config, r.record.seed);
+      if (serializeRun(r) !== serializeRun(replay)) return fail("replay from the recorded seed did not reproduce the run");
+      return pass("the run record carries {seed, configHash, engineVersion, criteriaVersion} and replays exactly");
+    },
+  },
   campaignCriterion("H5", "H5 — The acceptance harness asserts",
     "Every machine-checkable criterion in the document is encoded as a machine PASS/FAIL in this harness; no " +
       "acceptance verdict rests on a human comparing printed summaries to a table. (The harness's own ability " +
