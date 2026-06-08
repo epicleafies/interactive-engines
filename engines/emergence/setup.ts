@@ -61,11 +61,25 @@ export function validateConfig(config: Config): void {
     );
   }
 
-  // Seed headroom precondition (D-016/§4.3): the seeded prior can never reach the
-  // dominance threshold. The full D5 margin is checked by the D5 criterion with
-  // the tuned margin; this is the structural floor.
-  if (config.constants.SEED_CAP > config.constants.DOM_THRESHOLD) {
-    throw new Error("config: SEED_CAP must be <= DOM_THRESHOLD (seed must never start at dominance)");
+  // Seed headroom precondition (D-016/§4.3; V-26): the registered headroom is
+  // SEED_CAP <= DOM_THRESHOLD - D5's margin. The full margin is tuned, so the D5
+  // criterion enforces it at its registered value; this structural floor rejects
+  // the cases the validator can decide config-independently — a seed that starts
+  // AT or above the dominance threshold has zero headroom. Equality is rejected
+  // (V-26: setup formerly rejected only `>` and silently permitted `==`).
+  if (config.constants.SEED_CAP >= config.constants.DOM_THRESHOLD) {
+    throw new Error(
+      "config: SEED_CAP must be < DOM_THRESHOLD (the seeded prior must never reach dominance; " +
+        "the tuned D5 margin is enforced by the D5 criterion)",
+    );
+  }
+
+  // Dominance sustain bound (D-043/V-05): DOM_SUSTAIN must be >= 1. At 0 the
+  // "for DOM_SUSTAIN consecutive rounds" clause is vacuous (sustainCount >= 0 is
+  // always true), so a good would be crowned dominant on round 1 regardless of
+  // every other clause. The validator imposed no lower bound; this adds it.
+  if (config.constants.DOM_SUSTAIN < 1) {
+    throw new Error("config: DOM_SUSTAIN must be >= 1 (a value of 0 makes the sustain clause vacuous)");
   }
 
   // Denomination / range sanity on the constants the setup and round loop rely on.
