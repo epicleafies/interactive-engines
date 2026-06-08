@@ -15,8 +15,17 @@
  * entry and re-pin land. The full canonical trace is committed alongside this
  * module at harness/pins/project-seed-trace.json for independent inspection.
  *
- * Provenance: pinned against decisions-register D-001-D-032, origin/main head
- * 372885caccb546343dbe9021327f2a8c8f6d17b2.
+ * Provenance: re-pinned against the criteria-v2.3 / spec-v3.4 register state
+ * (triage rulings D-038...D-049). This is the single sequenced re-pin authorized
+ * by D-040 (RunResult.dominantGood removed from the hashed serialization) +
+ * D-032 (re-pin procedure) + D-049 (the one pin event after every trace-touching
+ * change). It is a REAL re-pin: the field was part of the hashed surface, so the
+ * digest moved — the event stream itself is byte-identical (the trace is the
+ * prior golden with the scalar field dropped). Born against the verifiable
+ * origin/main head f1d54c4493e60f580eacd0294bd34d6cbcf46d7b (the dominantGood
+ * removal commit, whose engine reproduces this digest). Supersedes the prior pin
+ * (digest 8550b39a...e945, register D-001-D-032), whose recorded head
+ * 372885ca... was unverifiable (V-42, resolved here).
  */
 
 import { createHash } from "node:crypto";
@@ -40,13 +49,17 @@ export function projectSeedDigest(trace = projectSeedTrace()): string {
 }
 
 /** The pinned digest. Re-pin (with a register entry) only when D-032's gated surfaces change. */
-export const PINNED_DIGEST = "8550b39a24163385fd4597df20f913b9d282ff4b97aae7b21440244c5443e945";
+export const PINNED_DIGEST = "25c592b5b544a6868a0cbc65b1d4e478964b5b353ce117d7397f4da68c3fac75";
 
-/** Human-readable summary of the pinned run (the trace shows good 0 reaching dominance). */
+/**
+ * Human-readable summary of the pinned run. Good 0 reaches dominance in this
+ * trace — read from the DOMINANCE event stream, which is the sole authority on
+ * which good dominated and when (D-040). The summary carries no scalar
+ * dominant-good field, matching the run result.
+ */
 export const PINNED_SUMMARY = {
   events: 1185,
   telemetryRounds: 120,
-  dominantGood: 0,
   reachedCap: false,
 } as const;
 
