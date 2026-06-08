@@ -13,8 +13,8 @@ isn't claimed.
 Governing documents are in the private sibling repo, expected at
 `../interactive-engines-internal/`:
 
-- `docs/emergence_sim_acceptance_criteria_v2_1.md` — the criteria (highest authority)
-- `docs/emergence_engine_spec_v3_1.md` — the engine spec
+- `docs/emergence_sim_acceptance_criteria_v2_2.md` — the criteria (highest authority)
+- `docs/emergence_engine_spec_v3_3.md` — the engine spec
 - `DECISIONS.md` — the decisions register
 
 Authority order: **criteria > spec > code.** Where they conflict, the upstream
@@ -29,17 +29,20 @@ DECISIONS.md or the spec. Ambiguities are findings to surface, not gaps to fill.
 Do not read anything under `../interactive-engines-internal/archive/` — it is a
 sealed record of a prior abandoned attempt and must not inform this build.
 
-## Currently in force (register through D-022; spec v3.1 governing)
+## Currently in force (steps 1–3 complete; step 4 BLOCKED — engine code-review gate, D-036)
 
-The spec-v2 independent review has returned and been fully triaged through the
-register: 68/68 findings ruled, deferred ledger empty (D-020). The first build
-session's four spec-divergence escalations are ruled (D-021 pure-decay score
-semantics, windows scoped to event-set predicates; D-022 determinism pinnings —
-seed self-exclusion and the RNG-tape draw-consumption contract). Governing
-documents: `emergence_sim_acceptance_criteria_v2_1.md` (tag `criteria-v2.1`)
-and `emergence_engine_spec_v3_1.md` (tag `spec-v3.1`); criteria govern the spec,
-the spec governs the engine, conflicts resolve upstream-wins (D-001). Build
-order in force (spec v3.1 §15):
+Build-order steps 1–3 are complete — the reference engine is functionally
+complete, the audit A-series is green, and the PROJECT_SEED trace is pinned at
+`da636ef`. **Step 4 (C0) and everything downstream are BLOCKED pending the
+independent engine code review (D-036).** Build sessions in this repository are
+paused until the gate lifts — no engine, harness, or campaign changes while the
+review runs, since the reviewed bundles are cut from the declared-complete
+commit and must stay true of HEAD.
+
+Governing documents: `emergence_sim_acceptance_criteria_v2_2.md` (tag
+`criteria-v2.2`) and `emergence_engine_spec_v3_3.md` (tag `spec-v3.3`); criteria
+govern the spec, the spec governs the engine, conflicts resolve upstream-wins
+(D-001). Build order (spec v3.3 §15):
 
 1. Assertion harness skeleton against criteria v2.1
 2. Reference engine (TypeScript strict, platform-pure, per spec §11 — RNG
@@ -53,9 +56,9 @@ order in force (spec v3.1 §15):
 7. Only then: full surfaces, copy, remaining I-series gates
 
 Cautions: the review report's Appendix A hand-execution is NOT a reference
-trace for v3.1 — it ran on phantom rulings since overruled (partner reuse,
+trace for v3.3 — it ran on phantom rulings since overruled (partner reuse,
 fractional seed events, the old step order). Pinned deterministic traces come
-from PROJECT_SEED on the v3.1 engine only; functional test seeds are documented
+from PROJECT_SEED on the v3.3 engine only; functional test seeds are documented
 at point of use and chosen for event coverage, never story. When the spec is
 ambiguous, stop and escalate for a register entry (D-012) — never improvise a
 rule.
