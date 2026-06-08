@@ -147,8 +147,12 @@ export interface Config {
 
   /** Optional per-agent pinned initial wants (criteria F1); bypass the draw, consume no RNG. */
   readonly pinnedWants?: Readonly<Record<number, WantTarget>>;
-  /** Optional per-position homeGood assignment; else derived from the holdings distribution. */
-  readonly homeGoods?: readonly number[];
+  /**
+   * Per-position homeGood assignment (one good id per ring position). Required:
+   * the engine never derives a holdings distribution — a structural fixture or a
+   * campaign config assigns it explicitly (V-16).
+   */
+  readonly homeGoods: readonly number[];
 
   readonly constants: EngineConstants;
 }

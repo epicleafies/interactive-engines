@@ -880,7 +880,7 @@ function smoke(label: string, ok: boolean, detail: string): void {
   const weighted: Config = { ...tradingPairFixture(), productionPolicy: "weighted" };
   const r = run({ ...weighted, ablation: { kind: "A2", attribute: "scarcity" } }, FUNCTIONAL_SEED);
   // Under A2:scarcity every PRODUCE is the producing agent's homeGood (profession).
-  const homeOf = weighted.homeGoods!;
+  const homeOf = weighted.homeGoods;
   const offProfile = r.events.some((e) => e.type === "PRODUCE" && e.good !== homeOf[e.agent]);
   const baseVaries = run(weighted, FUNCTIONAL_SEED).events.some((e) => e.type === "PRODUCE" && e.good !== homeOf[e.agent]);
   smoke("A2:scarcity", !offProfile && baseVaries, "profession policy regardless of weights (baseline weighted draw varies; ablated is always homeGood)");

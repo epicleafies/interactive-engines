@@ -18,8 +18,6 @@
 
 import type { SizeClass } from "./types.ts";
 
-const RANK: Readonly<Record<SizeClass, number>> = { fine: 2, coarse: 1, whole: 0 };
-
 /**
  * True iff the two size classes are trade-compatible. Derivation that reproduces
  * the table exactly: a pairing fails iff neither side is `fine` and at least one
@@ -32,5 +30,3 @@ export function sizeCompatible(a: SizeClass, b: SizeClass): boolean {
   // remaining cases involve a `whole` against a non-fine: fail.
   return false;
 }
-
-export { RANK as SIZE_CLASS_RANK };

@@ -11,11 +11,6 @@ export function ringDistance(a: number, b: number, n: number): number {
   return Math.min(raw, n - raw);
 }
 
-/** Whether two positions are within `radius` ring positions of each other. */
-export function withinRadius(a: number, b: number, n: number, radius: number): boolean {
-  return ringDistance(a, b, n) <= radius;
-}
-
 /**
  * Mutual reach (criteria B5; engine spec §6.4). A trade is eligible only if the
  * ring distance between the parties is <= the MINIMUM of the two held goods'

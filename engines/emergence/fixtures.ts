@@ -202,7 +202,12 @@ export function scaledFixture(): Config {
  * never cited for any C/D/E-series claim.
  *
  * The two focal goods contrast: good 0 is strong (all-best, durable,
- * recognizable) and tends to win the detector verdict; good 1 is a mid focal.
+ * recognizable). It does NOT usually win the detector verdict — across seeds it
+ * reaches dominance in only ~30% of runs, because a good whose strong profile
+ * makes its acceptance share open high has little room to satisfy the D7 rise
+ * clause (A(g) must rise >= DOM_RISE_MIN above its first defined value), a
+ * lockout that is intended, not a defect (V-01/V-02; the D7<->D2/C feasibility
+ * tension is a logged C0 watch-item). good 1 is a mid focal.
  * The two all-middle FILLERS carry the spoilage (mid durability) and the fakes
  * (mid recognizability, fake probability > 0), and exercise filler promotion.
  */

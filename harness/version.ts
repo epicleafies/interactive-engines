@@ -20,8 +20,9 @@ export const ENGINE_VERSION = "0.5.0";
 
 /**
  * The acceptance-criteria document this harness asserts against. Matches the
- * internal repo's `emergence_sim_acceptance_criteria_v2_1.md` (tag
- * `criteria-v2.1`). QA output stamps this so a result can never be silently
- * compared against the wrong bar (H3).
+ * internal repo's `emergence_sim_acceptance_criteria_v2_3.md` (tag
+ * `criteria-v2.3`, adopted D-046). QA output stamps this so a result can never be
+ * silently compared against the wrong bar; the H3 assertion anchors on this
+ * governing version and fails if the stamp drifts from it (D-041/V-18, D-048).
  */
-export const CRITERIA_VERSION = "criteria-v2.1";
+export const CRITERIA_VERSION = "criteria-v2.3";

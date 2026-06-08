@@ -153,7 +153,7 @@ export function runSetup(state: EngineStateInternal): void {
 
   // homeGoods (no draws).
   for (let pos = 0; pos < config.ringSize; pos++) {
-    state.agents[pos]!.homeGood = config.homeGoods![pos]!;
+    state.agents[pos]!.homeGood = config.homeGoods[pos]!;
   }
 
   // 1. Endowment, ring-position order (fake draws here).
