@@ -320,15 +320,23 @@ export interface RoundTelemetry {
 
 import type { RunRecord } from "../../harness/replay.ts";
 
-/** The full, replayable output of one run. */
+/**
+ * The full, replayable output of one run.
+ *
+ * There is deliberately no scalar "dominant good" field (D-040). Dominance is
+ * unique per round but non-terminal — it may lapse and re-fire, and several
+ * goods may dominate across a run — so no single good id can honestly summarize
+ * it. The DOMINANCE event stream is the sole authority on which good(s) dominated
+ * and when; `CAP_REACHED` (and `reachedCap`) report the complementary outcome:
+ * the cap was reached with no DOMINANCE event in the run.
+ */
 export interface RunResult {
   readonly record: RunRecord;
   readonly events: readonly EngineEvent[];
   readonly telemetry: readonly RoundTelemetry[];
   readonly finalAgents: readonly Agent[];
-  /** Reached the round cap without a dominance verdict (a first-class outcome). */
+  /** Reached the round cap without any dominance verdict (a first-class outcome). */
   readonly reachedCap: boolean;
-  readonly dominantGood: number | null;
 }
 
 /** The engine's single entry point: a pure function of configuration and seed. */

@@ -125,7 +125,15 @@ export interface EngineStateInternal {
   regionsAligned: boolean;
   promoted: Set<number>;
   firstBridgeDone: boolean;
-  dominantGood: number | null;
+  /**
+   * Whether any good has dominated at any point in the run (D-040). The DOMINANCE
+   * event stream is the sole authority on WHICH good(s) dominated and WHEN — this
+   * is only the has-dominated predicate the CAP_REACHED gate reads (CAP_REACHED
+   * fires iff no DOMINANCE event has fired). No scalar "the dominant good" is
+   * carried: dominance is unique per round but non-terminal, so a single good id
+   * cannot honestly summarize it.
+   */
+  hasDominated: boolean;
   reachedCap: boolean;
 }
 
@@ -204,7 +212,7 @@ export function createState(config: Config, seed: number): EngineStateInternal {
     regionsAligned: false,
     promoted: new Set<number>(),
     firstBridgeDone: false,
-    dominantGood: null,
+    hasDominated: false,
     reachedCap: false,
   };
 }

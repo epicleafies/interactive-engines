@@ -47,7 +47,6 @@ export const run: RunFn = (config, seed) => {
     telemetry: state.telemetry,
     finalAgents: state.agents.map(freezeAgent),
     reachedCap: state.reachedCap,
-    dominantGood: state.dominantGood,
   };
 };
 

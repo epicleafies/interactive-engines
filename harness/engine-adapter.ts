@@ -57,6 +57,10 @@ export function structuralFixtures(): NamedFixture[] {
  * telemetry, the final agents, and the outcome) — what two replays of the same
  * {config, seed} must match bit-for-bit. The run record is excluded: it is
  * provenance metadata, not behavior.
+ *
+ * The outcome is reported by `reachedCap` plus the DOMINANCE events in the
+ * stream; there is no scalar `dominantGood` field (D-040 — removed from the
+ * hashed surface, forcing the single re-pin to a new digest).
  */
 export function serializeRun(result: RunResult): string {
   return JSON.stringify({
@@ -64,6 +68,5 @@ export function serializeRun(result: RunResult): string {
     telemetry: result.telemetry,
     finalAgents: result.finalAgents,
     reachedCap: result.reachedCap,
-    dominantGood: result.dominantGood,
   });
 }

@@ -207,7 +207,10 @@ export function stepStatistics(
     const dominantNow = gs.sustainCount >= c.DOM_SUSTAIN;
     if (dominantNow && !gs.dominant) {
       state.events.push({ type: "DOMINANCE", round, good: g });
-      if (state.dominantGood === null) state.dominantGood = g;
+      // The DOMINANCE event just emitted is the authority on which good and when;
+      // here we only record THAT a dominance occurred, for the CAP_REACHED gate
+      // (D-040). No scalar "dominant good" is stored.
+      state.hasDominated = true;
     }
     gs.dominant = dominantNow;
   }
@@ -261,8 +264,11 @@ export function stepStatistics(
     }
   }
 
-  // Cap reached without any dominance verdict (a first-class outcome).
-  if (round >= c.ROUND_CAP && state.dominantGood === null && !state.reachedCap) {
+  // Cap reached without any dominance verdict (a first-class outcome). The gate
+  // is the has-dominated predicate — CAP_REACHED fires at the cap iff no DOMINANCE
+  // event fired in the run (D-040). Byte-identical to the prior `dominantGood ===
+  // null` gate, since that field was non-null exactly when a DOMINANCE had fired.
+  if (round >= c.ROUND_CAP && !state.hasDominated && !state.reachedCap) {
     state.events.push({ type: "CAP_REACHED", round });
     state.reachedCap = true;
   }

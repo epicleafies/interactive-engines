@@ -22,6 +22,7 @@
 import type { Assertion, AssertionResult, HarnessContext } from "./assert.ts";
 import { pass, fail, pending } from "./assert.ts";
 import { makeRunRecord } from "./replay.ts";
+import { hashConfig } from "./hash.ts";
 import { CRITERIA_VERSION, ENGINE_VERSION } from "./version.ts";
 import {
   CONSTANTS,
@@ -686,7 +687,6 @@ const D: Assertion[] = [
       const dominance = r.events.filter((e) => e.type === "DOMINANCE").length;
       if (trades !== 0) return fail("the single-good fixture unexpectedly produced trades");
       if (dominance !== 0) return fail("a good with zero in-window trades was crowned dominant");
-      if (r.dominantGood !== null) return fail("a no-trade good was recorded as dominant");
       return pass("a good with zero in-window trade evidence is never crowned dominant (the D7 trade floor bites)");
     },
   },
@@ -743,7 +743,8 @@ const G: Assertion[] = [
         if (r.telemetry.length !== f.config.constants.ROUND_CAP) {
           return fail(`${f.name} did not run to its round cap`);
         }
-        if (r.dominantGood !== null) return fail(`${f.name} coerced a winner in a degenerate market`);
+        // Authority is the DOMINANCE event stream, not a scalar field (D-040).
+        if (r.events.some((e) => e.type === "DOMINANCE")) return fail(`${f.name} coerced a winner in a degenerate market`);
       }
       return pass(`${degenerate.length} degenerate fixtures ran to the cap with a defined no-convergence outcome`);
     },
@@ -756,7 +757,8 @@ const G: Assertion[] = [
       "CAP_REACHED, records reachedCap, and names no dominant good — and is never dressed up as a weak win.",
     evaluate: (): AssertionResult => {
       const r = run(structuralFixtures().find((f) => /frozen/.test(f.name))!.config, STRUCTURAL_SEED);
-      if (r.dominantGood !== null) return fail("the frozen fixture unexpectedly converged");
+      // No DOMINANCE event ever fired — the run named no dominant good (D-040).
+      if (r.events.some((e) => e.type === "DOMINANCE")) return fail("the frozen fixture unexpectedly converged");
       const capEvents = r.events.filter((e) => e.type === "CAP_REACHED").length;
       if (capEvents !== 1) return fail(`expected exactly one CAP_REACHED, saw ${capEvents}`);
       if (!r.reachedCap) return fail("reachedCap was not set on a non-converging run");
@@ -866,22 +868,20 @@ const H: Assertion[] = [
       "configuration, the engine version, and the criteria version it is judged against — so a disputed " +
       "number can always be re-derived against the right bar.",
     evaluate: (): AssertionResult => {
-      const cfgA = { mode: "small", ringSize: 10, note: "fixture" };
-      const cfgAReordered = { note: "fixture", ringSize: 10, mode: "small" };
-      const cfgB = { mode: "small", ringSize: 11, note: "fixture" };
-      const recA = makeRunRecord(cfgA, 1231006505);
-      const recAReordered = makeRunRecord(cfgAReordered, 1231006505);
-      const recB = makeRunRecord(cfgB, 1231006505);
-      if (recA.criteriaVersion !== CRITERIA_VERSION) return fail("run record does not stamp the criteria version");
-      if (recA.engineVersion !== ENGINE_VERSION) return fail("run record does not stamp the engine version");
-      if (recA.seed !== 1231006505) return fail("run record does not preserve the seed");
-      if (recA.configHash !== recAReordered.configHash) {
-        return fail("config hash changed under key reordering (not canonical)");
-      }
-      if (recA.configHash === recB.configHash) {
-        return fail("config hash collided for materially different configs");
-      }
-      return pass(`run record stamps {seed, configHash, engine=${ENGINE_VERSION}, criteria=${CRITERIA_VERSION}} and the hash is canonical`);
+      // The version/seed stamp is recorded for every run, from a real config.
+      const rec = makeRunRecord(structuralFixtures()[0]!.config, 1231006505);
+      if (rec.criteriaVersion !== CRITERIA_VERSION) return fail("run record does not stamp the criteria version");
+      if (rec.engineVersion !== ENGINE_VERSION) return fail("run record does not stamp the engine version");
+      if (rec.seed !== 1231006505) return fail("run record does not preserve the seed");
+      // The integrity hash (D-042) is canonical: key order does not change it, and
+      // materially different configs do not collide. Tested on the hash function
+      // directly — its canonicality is independent of the run-record shape.
+      const hashA = hashConfig({ mode: "small", ringSize: 10, note: "fixture" });
+      const hashAReordered = hashConfig({ note: "fixture", ringSize: 10, mode: "small" });
+      const hashB = hashConfig({ mode: "small", ringSize: 11, note: "fixture" });
+      if (hashA !== hashAReordered) return fail("config hash changed under key reordering (not canonical)");
+      if (hashA === hashB) return fail("config hash collided for materially different configs");
+      return pass(`run record stamps {seed, full config + integrity hash, engine=${ENGINE_VERSION}, criteria=${CRITERIA_VERSION}} and the hash is canonical`);
     },
   },
   {

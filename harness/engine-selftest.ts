@@ -705,7 +705,7 @@ const domCount = (state: ReturnType<typeof detectorState>, good: number) =>
   for (const r of [2, 3]) { setBkt(g0, r, W, 9, 10, 6); setBkt(g1, r, W, 1, 10, 0); stepStatistics(state, r, []); }
   check(domCount(state, 0) === 0, "no dominance before the clauses hold for DOM_SUSTAIN consecutive rounds");
   setBkt(g0, 4, W, 9, 10, 6); setBkt(g1, 4, W, 1, 10, 0); stepStatistics(state, 4, []);
-  check(domCount(state, 0) === 1 && state.dominantGood === 0, "DOMINANCE fires once the four clauses hold for DOM_SUSTAIN consecutive rounds");
+  check(domCount(state, 0) === 1 && state.hasDominated, "DOMINANCE fires once the four clauses hold for DOM_SUSTAIN consecutive rounds");
 }
 {
   // reset: a clause miss mid-streak forces a fresh DOM_SUSTAIN run.
@@ -788,7 +788,7 @@ const domCount = (state: ReturnType<typeof detectorState>, good: number) =>
   }
   const capEvents = state.events.filter((e) => e.type === "CAP_REACHED");
   check(capEvents.length === 1, "CAP_REACHED fires exactly once for a non-converging run");
-  check(state.reachedCap === true && state.dominantGood === null, "the run records reachedCap with no dominant good");
+  check(state.reachedCap === true && state.hasDominated === false, "the run records reachedCap with no good having dominated");
 
   // Every score and every A(g) is a defined finite value through the whole run (G6).
   const lastA = state.telemetry[cap - 1]!.acceptanceShare;
@@ -812,7 +812,7 @@ const domCount = (state: ReturnType<typeof detectorState>, good: number) =>
   check(state.goodStats[0]!.firstDefinedA !== null, "spoilage defines the sole good (A becomes defined)");
   check(state.events.filter((e) => e.type === "SPOIL_DESTROY").length > 0, "the perishable good actually spoils");
   check(state.events.filter((e) => e.type === "DOMINANCE").length === 0, "a sole-defined good is never crowned dominant (no runner-up)");
-  check(state.dominantGood === null, "no dominant good is recorded");
+  check(state.hasDominated === false, "the has-dominated predicate stays false (no scalar dominant good is recorded — D-040)");
   check(state.events.some((e) => e.type === "CAP_REACHED"), "the run reaches the cap with a defined non-convergence outcome");
 }
 
@@ -932,7 +932,7 @@ function smoke(label: string, ok: boolean, detail: string): void {
     baseSeed: FUNCTIONAL_SEED,
     metrics: [
       { name: "events", extract: (r) => r.events.length },
-      { name: "converged", extract: (r) => (r.dominantGood === null ? 0 : 1) },
+      { name: "converged", extract: (r) => (r.events.some((e) => e.type === "DOMINANCE") ? 1 : 0) },
     ],
     tbdDeclarations: decls,
     passPredicate: (r) => r.reachedCap,
