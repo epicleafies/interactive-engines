@@ -85,12 +85,21 @@ const FUNCTIONAL_SEED = 12345; // arbitrary; exercises setup draws, not chosen f
     validateConfig(bad);
   }, "focal want-share over 1 - FILLER_MIN_SHARE must be rejected");
 
-  // SEED_CAP above DOM_THRESHOLD is rejected (seed must never start at dominance).
+  // SEED_CAP above DOM_THRESHOLD is rejected (seed must never reach dominance).
   throws(() => {
     const c = smallContrastFixture();
     const bad: Config = { ...c, constants: { ...FIXTURE_CONSTANTS, SEED_CAP: 0.9 } };
     validateConfig(bad);
-  }, "SEED_CAP > DOM_THRESHOLD must be rejected");
+  }, "SEED_CAP above DOM_THRESHOLD must be rejected");
+
+  // The FULL §2.4 bound bites: SEED_CAP within the D5 margin of DOM_THRESHOLD is
+  // rejected even when below it (0.60 < DOM_THRESHOLD 0.70 but > 0.70 - D5_MARGIN
+  // 0.15 = 0.55). The old partial `< DOM_THRESHOLD` floor wrongly accepted this (D-056).
+  throws(() => {
+    const c = smallContrastFixture();
+    const bad: Config = { ...c, constants: { ...FIXTURE_CONSTANTS, SEED_CAP: 0.6 } };
+    validateConfig(bad);
+  }, "SEED_CAP within D5_MARGIN of DOM_THRESHOLD must be rejected (full bound, not just < threshold)");
 
   // homeGoods length mismatch is rejected.
   throws(() => {

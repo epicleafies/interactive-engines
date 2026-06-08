@@ -161,6 +161,7 @@ export interface Config {
 export interface EngineConstants {
   readonly SEED_STRENGTH: number; // K, the prior weight
   readonly SEED_CAP: number; // cap on the seeded prior fraction
+  readonly D5_MARGIN: number; // D5 seed headroom: validity precondition SEED_CAP <= DOM_THRESHOLD - D5_MARGIN (D-056)
   readonly ACCEPT_MARGIN: number; // epsilon, the single comparison constant
   readonly DECAY_FACTOR: number; // per-round multiplicative recency factor
   readonly WINDOW_ROUNDS: number; // rolling window length, rounds

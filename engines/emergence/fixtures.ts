@@ -26,6 +26,10 @@ import type { Config, EngineConstants, GoodType, LevelMapping } from "./types.ts
 export const FIXTURE_CONSTANTS: EngineConstants = {
   SEED_STRENGTH: 3,
   SEED_CAP: 0.3,
+  // Non-canonical fixture margin (D-023): the canonical D5_MARGIN value is TBD/C0
+  // (D-056). 0.15 here keeps every fixture valid (SEED_CAP 0.3 <= 0.7 - 0.15 = 0.55)
+  // and is never cited as the registered value.
+  D5_MARGIN: 0.15,
   ACCEPT_MARGIN: 0.05,
   DECAY_FACTOR: 0.8,
   WINDOW_ROUNDS: 10,

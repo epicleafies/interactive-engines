@@ -61,16 +61,19 @@ export function validateConfig(config: Config): void {
     );
   }
 
-  // Seed headroom precondition (D-016/§4.3; V-26): the registered headroom is
-  // SEED_CAP <= DOM_THRESHOLD - D5's margin. The full margin is tuned, so the D5
-  // criterion enforces it at its registered value; this structural floor rejects
-  // the cases the validator can decide config-independently — a seed that starts
-  // AT or above the dominance threshold has zero headroom. Equality is rejected
-  // (V-26: setup formerly rejected only `>` and silently permitted `==`).
-  if (config.constants.SEED_CAP >= config.constants.DOM_THRESHOLD) {
+  // Seed headroom precondition (§2.4 validity precondition #2; D-016/§4.3; V-26;
+  // D-056): SEED_CAP <= DOM_THRESHOLD - D5_MARGIN, enforced in FULL at load and
+  // asserted by G7 — not deferred to D5 grading. D5_MARGIN is a named engine
+  // constant whose home D-056 rules and whose value C0 fills under H6; the
+  // validator reads it symbolically, whatever C0 sets it to, so the bound is
+  // complete now. (Supersedes the partial `< DOM_THRESHOLD` floor, which accepted
+  // configs §2.4 deems invalid — e.g. SEED_CAP 0.60 against a 0.15 margin and
+  // DOM_THRESHOLD 0.70.)
+  const seedCeiling = config.constants.DOM_THRESHOLD - config.constants.D5_MARGIN;
+  if (config.constants.SEED_CAP > seedCeiling + 1e-12) {
     throw new Error(
-      "config: SEED_CAP must be < DOM_THRESHOLD (the seeded prior must never reach dominance; " +
-        "the tuned D5 margin is enforced by the D5 criterion)",
+      `config: SEED_CAP ${config.constants.SEED_CAP} exceeds DOM_THRESHOLD - D5_MARGIN (${seedCeiling}); ` +
+        "the seeded prior must never start within the D5 headroom of dominance; rejected, never normalized",
     );
   }
 
