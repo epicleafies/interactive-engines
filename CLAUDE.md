@@ -13,8 +13,8 @@ isn't claimed.
 Governing documents are in the private sibling repo, expected at
 `../interactive-engines-internal/`:
 
-- `docs/emergence_sim_acceptance_criteria_v2_2.md` — the criteria (highest authority)
-- `docs/emergence_engine_spec_v3_3.md` — the engine spec
+- `docs/emergence_sim_acceptance_criteria_v2_3.md` — the criteria (highest authority)
+- `docs/emergence_engine_spec_v3_4.md` — the engine spec
 - `DECISIONS.md` — the decisions register
 
 Authority order: **criteria > spec > code.** Where they conflict, the upstream
@@ -29,39 +29,66 @@ DECISIONS.md or the spec. Ambiguities are findings to surface, not gaps to fill.
 Do not read anything under `../interactive-engines-internal/archive/` — it is a
 sealed record of a prior abandoned attempt and must not inform this build.
 
-## Currently in force (steps 1–3 complete; step 4 BLOCKED — engine code-review gate, D-036)
+## Currently in force (steps 1–3 complete; code-review gate LIFTED at D-049; post-gate-lift engine batch in progress)
 
-Build-order steps 1–3 are complete — the reference engine is functionally
-complete, the audit A-series is green, and the PROJECT_SEED trace is pinned at
-`da636ef`. **Step 4 (C0) and everything downstream are BLOCKED pending the
-independent engine code review (D-036).** Build sessions in this repository are
-paused until the gate lifts — no engine, harness, or campaign changes while the
-review runs, since the reviewed bundles are cut from the declared-complete
-commit and must stay true of HEAD.
+Build-order steps 1–3 are complete and the independent engine code review is
+closed: its 42 findings were triaged (D-038–D-045), criteria v2.3 and engine
+spec v3.4 adopted (D-046/D-047), and the **D-036 gate lifted at D-049** — the
+freeze on engine, harness, campaign, and register commits is released. Build
+sessions in this repository are no longer paused.
 
-Governing documents: `emergence_sim_acceptance_criteria_v2_2.md` (tag
-`criteria-v2.2`) and `emergence_engine_spec_v3_3.md` (tag `spec-v3.3`); criteria
+The current work is the post-gate-lift change list (in
+`../interactive-engines-internal/docs/reviews/`), run **serially in dependency
+order, not ID order**:
+
+1. §11 RNG-tape reconciliation (production-first per D-038; the engine already
+   draws this way — no behavior change).
+2. The trace/hash-touching changes: remove `RunResult.dominantGood` and
+   re-express the `CAP_REACHED` gate against a has-dominated predicate (D-040);
+   `RunRecord` stores the full configuration, not a hash (D-042); validator
+   bounds `DOM_SUSTAIN ≥ 1` and `SEED_CAP ≤ DOM_THRESHOLD − D5 margin`
+   (D-043/D-041).
+3. The **single confirmatory re-pin** (D-032: rationale before inspection,
+   provenance line naming the v3.4 register state and a verifiable origin head).
+   Before it, confirm `dominantGood` is not in the hashed serialization — if it
+   is, the re-pin is real (new digest), not confirmatory.
+4. Everything else: the harness honesty fixes (D-041 — unstub the false-pending
+   assertions, distributional G2/G3, enforce the SEED_CAP/D5 margin, lift the
+   D7 battery checks, the `report.ts` INCOMPLETE footnote), the new assertions
+   (D8/B14/G7/G4 against criteria v2.3), dead-code removal, comment/type
+   corrections, and `CRITERIA_VERSION` → `criteria-v2.3`.
+
+Do not parallelize and do not re-pin twice: every trace/hash-touching change
+lands before the single re-pin (step 3).
+
+Governing documents: `emergence_sim_acceptance_criteria_v2_3.md` (tag
+`criteria-v2.3`) and `emergence_engine_spec_v3_4.md` (tag `spec-v3.4`); criteria
 govern the spec, the spec governs the engine, conflicts resolve upstream-wins
-(D-001). Build order (spec v3.3 §15):
+(D-001).
 
-1. Assertion harness skeleton against criteria v2.1
-2. Reference engine (TypeScript strict, platform-pure, per spec §11 — RNG
-   tape included)
-3. A-series ablations green (A1, A2, A6, A8, A9 especially)
-4. C0 feasibility campaign — every TBD logged in the register before the
-   campaign that tests it (H6), tuned-class constants with sweep artifacts
-5. D-series on the synthesis configuration
+A-series status (corrected per D-041/V-39 — the prior "audit A-series is green"
+overstated): A2, A6, A8(a,b), and A9 are asserted green; A1, A3, A5, A7, A8(c)
+are pending and get wired by the honesty fixes in step 4. The PROJECT_SEED
+trace is pinned at `da636ef`, refreshed by the single re-pin in step 3.
+
+After this batch lands and the re-pin holds (spec v3.4 §15):
+
+4. C0 feasibility campaign — the held registration ratifies, consuming the
+   C2/C5 demonstration configs (D-055) and the MAX_GOODS/MAX_PARTICIPANTS caps
+   (D-052); every TBD logged in the register before the campaign that tests it
+   (H6), tuned-class constants with sweep artifacts.
+5. D-series on the synthesis configuration.
 6. Minimal probe surface — named I7 milestone — and the first human sessions
-   (I8 records, I9 probe)
-7. Only then: full surfaces, copy, remaining I-series gates
+   (I8 records, I9 probe).
+7. Only then: full surfaces, copy, remaining I-series gates.
 
-Cautions: the review report's Appendix A hand-execution is NOT a reference
-trace for v3.3 — it ran on phantom rulings since overruled (partner reuse,
+Cautions: the spec-v2 review report's Appendix A hand-execution is NOT a
+reference trace — it ran on phantom rulings since overruled (partner reuse,
 fractional seed events, the old step order). Pinned deterministic traces come
-from PROJECT_SEED on the v3.3 engine only; functional test seeds are documented
-at point of use and chosen for event coverage, never story. When the spec is
-ambiguous, stop and escalate for a register entry (D-012) — never improvise a
-rule.
+from PROJECT_SEED on the current engine only; functional test seeds are
+documented at point of use and chosen for event coverage, never story. When the
+spec is ambiguous, stop and escalate for a register entry (D-012) — never
+improvise a rule.
 
 ## Hard technical constraints (register D-011)
 
@@ -75,8 +102,9 @@ rule.
   integer ops, `Math.imul`, bit shifts, `Math.min/max/abs/floor/trunc`.
   Recency decay is a per-round multiplicative factor, never `exp(-λ·age)`.
 - **No `Math.random` anywhere** — engine or harness. All randomness flows from
-  the seeded PRNG, and every run records `{seed, config hash, engine version,
-  criteria version}` and replays bit-identically.
+  the seeded PRNG, and every run records `{seed, full configuration, engine
+  version, criteria version}` (the full configuration, not a hash of it — D-042)
+  and replays bit-identically from its record alone.
 
 ## Seed rules (register D-010)
 
