@@ -87,8 +87,10 @@ export function renderReport(evaluated: readonly EvaluatedAssertion[]): string {
   lines.push(`VERDICT: ${s.verdict.toUpperCase()}`);
   if (s.verdict === "incomplete") {
     lines.push(
-      "  (incomplete: pending = awaiting reference engine; " +
-        "blocked = awaiting decisions-register ruling. Neither counts as acceptance.)",
+      "  (incomplete: the reference engine is implemented and its assertions are wired and evaluated live. The " +
+        "remaining pendings are deferred by BUILD STAGE — a tuned campaign configuration (C0+, tuned TBD " +
+        "constants unfilled) or a learner-facing surface (steps 6-7) — not a missing engine. blocked = awaiting " +
+        "a decisions-register ruling. Neither pending nor blocked counts as acceptance.)",
     );
   }
   return lines.join("\n");

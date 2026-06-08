@@ -19,7 +19,7 @@
  * the gate is upstream of them.
  */
 
-import type { Assertion, AssertionResult, HarnessContext } from "./assert.ts";
+import type { Assertion, AssertionResult } from "./assert.ts";
 import { pass, fail, pending } from "./assert.ts";
 import { makeRunRecord } from "./replay.ts";
 import { hashConfig } from "./hash.ts";
@@ -41,12 +41,20 @@ import {
   serializeRun,
   tradingPairFixture,
   smallContrastFixture,
+  singleGoodPerishableFixture,
   createState,
   runSetup,
+  runRound,
   runToInternalState,
   selectPartner,
+  validateConfig,
+  tallyUpdate,
+  stepStatistics,
+  type GoodStatState,
 } from "./engine-adapter.ts";
-import { NO_EVIDENCE } from "../engines/emergence/types.ts";
+import { NO_EVIDENCE, type Config, type EngineEvent } from "../engines/emergence/types.ts";
+import { deriveSeeds, DEFAULT_BATCH_SIZE } from "./batch.ts";
+import { passRate } from "./stats.ts";
 import { refereeVerdict } from "./referee.ts";
 import { verifyPin, PINNED_DIGEST } from "./project-seed-pin.ts";
 
@@ -59,21 +67,42 @@ const STRUCTURAL_SEED = 20260607;
 
 // --- Stage reasons -------------------------------------------------------
 
-const ENGINE_PENDING =
-  "reference engine not yet implemented (build-order step 2, gated on register rulings A-D)";
 const CAMPAIGN_PENDING =
   "requires a tuned campaign configuration; tuned TBD constants unfilled (H6) and the engine is pending";
 const SURFACE_PENDING =
   "requires a learner-facing surface, which does not exist yet (build-order steps 6-7)";
 
-/** A criterion whose check is wired in once the reference engine exists. */
-function engineCriterion(id: string, criterion: string, claim: string): Assertion {
+// --- Dominance-detector control (D7 lift, V-38) --------------------------
+// A 1-round window so each round's A(g) and trade count are exactly that round's
+// injected bucket — direct control of the four dominance clauses in the NAMED
+// battery (the same white-box construction the engine self-test uses, lifted
+// here so the per-capita trade floor and the rise clause are acceptance criteria,
+// not selftest-only).
+function detectorControlConfig(): Config {
+  const base = tradingPairFixture();
   return {
-    id,
-    criterion,
-    claim,
-    evaluate: (ctx: HarnessContext): AssertionResult =>
-      ctx.engine === undefined ? pending(ENGINE_PENDING) : pending("engine present but this check is not yet wired"),
+    ...base,
+    constants: { ...base.constants, WINDOW_ROUNDS: 1, DOM_SUSTAIN: 3, DOM_THRESHOLD: 0.7, DOM_GAP: 0.15, DOM_MIN_TRADE_SHARE: 0.1, DOM_RISE_MIN: 0.05, ROUND_CAP: 100 },
+  };
+}
+function setDetectorBucket(gs: GoodStatState, round: number, window: number, pos: number, tot: number, trade: number): void {
+  const i = round % window;
+  gs.posBucket[i] = pos;
+  gs.totBucket[i] = tot;
+  gs.tradeBucket[i] = trade;
+  gs.bucketRound[i] = round;
+}
+function dominanceCount(events: readonly EngineEvent[], good: number): number {
+  return events.filter((e) => e.type === "DOMINANCE" && e.good === good).length;
+}
+/** A detector-control config at a given population N and window (G4 denomination check). */
+function detectorConfigN(n: number, window: number): Config {
+  const base = tradingPairFixture();
+  return {
+    ...base,
+    ringSize: n,
+    homeGoods: Array.from({ length: n }, (_, i) => i % 2),
+    constants: { ...base.constants, WINDOW_ROUNDS: window, DOM_SUSTAIN: 3, DOM_THRESHOLD: 0.7, DOM_GAP: 0.15, DOM_MIN_TRADE_SHARE: 0.1, DOM_RISE_MIN: 0.05, ROUND_CAP: 100 },
   };
 }
 
@@ -109,20 +138,40 @@ const A: Assertion[] = [
       "always passes; portability off -> reach unrestricted; scarcity off -> profession policy). The " +
       "zero-measurable-effect-on-outcomes claim is distributional and runs with the statistical battery.",
   ),
-  engineCriterion(
-    "A3",
-    "A3 — No global knowledge",
-    "In local-information mode, no agent decision reads state outside its own neighborhood: an event " +
-      "outside an agent's witness radius cannot change that agent's behavior until the information " +
-      "propagates through trades and observations.",
-  ),
-  engineCriterion(
-    "A4",
-    "A4 — Seeding honesty",
-    "Acceptance tallies initialize from visible wants only; no tally is pre-seeded with the intended " +
-      "winner. The seeded prior is a function of the agent's visible neighbors' wants and a registered cap " +
-      "alone.",
-  ),
+  {
+    id: "A3",
+    criterion: "A3 — No global knowledge",
+    claim:
+      "In local-information mode, no agent decision reads state outside its own neighborhood. An event's " +
+      "only decision-relevant effect is on the acceptance tallies of agents within the witness radius of a " +
+      "participant; an agent beyond that radius sees no change to its scores — its decision inputs — from the " +
+      "event. Information reaches a distant agent only later, once it propagates through trades it witnesses.",
+    evaluate: (): AssertionResult => {
+      // A small witness radius on a 10-ring leaves some agents genuinely outside.
+      const radius = 2;
+      const base = smallContrastFixture();
+      const cfg: Config = { ...base, constants: { ...base.constants, WITNESS_RADIUS: radius } };
+      const state = createState(cfg, STRUCTURAL_SEED);
+      runSetup(state);
+      // Zero the score accumulators so the only movement is this one event's.
+      for (const a of state.agents) for (let g = 0; g < state.goodCount; g++) { a.scorePos[g] = 0; a.scoreTot[g] = 0; }
+      const trade: EngineEvent = { type: "TRADE", round: 1, proposer: 0, partner: 1, goodFromProposer: 0, goodFromPartner: 1, viaBridge: false };
+      tallyUpdate(state, 1, [trade]);
+      let insideChanged = 0;
+      let outsideTouched = 0;
+      for (const a of state.agents) {
+        const dist = Math.min(ringDistance(a.position, 0, cfg.ringSize), ringDistance(a.position, 1, cfg.ringSize));
+        const changed = a.scoreTot.some((v) => v !== 0) || a.scorePos.some((v) => v !== 0);
+        if (dist <= radius) { if (changed) insideChanged++; }
+        else if (changed) outsideTouched++;
+      }
+      if (outsideTouched > 0) {
+        return fail(`${outsideTouched} agents beyond the witness radius had tallies changed by a distant event — a global-knowledge leak`);
+      }
+      if (insideChanged === 0) return fail("no in-radius agent registered the event; witnessing is broken, the test is vacuous");
+      return pass(`a distant event moves only in-radius tallies: ${insideChanged} in-radius witnesses updated, 0 out-of-radius agents touched`, { insideChanged });
+    },
+  },
   campaignCriterion(
     "A5",
     "A5 — Winner not hardcoded",
@@ -343,21 +392,84 @@ const B: Assertion[] = [
       return pass("fresh/stale/destroyed boundaries and never-spoils behavior match the schedule semantics");
     },
   },
-  engineCriterion(
-    "B2.staleTrade",
-    "B2 — No completed trade leaves a stale non-want held",
-    "Stale goods are refused as bridge acquisitions by all agents while remaining acceptable as direct " +
-      "wants; the invariant asserted over a run is that no completed trade ever leaves any party holding a " +
-      "stale instance of a type other than its current want.",
-  ),
-  engineCriterion(
-    "B3",
-    "B3 — Recognizability reveal & exit accounting",
-    "Fakes reveal only after acquisition, with the loss landing on the accepter, who writes a negative tally " +
-      "entry weighted heavier than a mere observation. Every instance created fake exits via an exit event " +
-      "and never as a satisfied want; per-channel telemetry attributes fake exits exactly, so a fake lost to " +
-      "spoilage before discovery still counts in the fake ledger.",
-  ),
+  {
+    id: "B2.staleTrade",
+    criterion: "B2 — No completed trade leaves a stale non-want held",
+    claim:
+      "Stale goods are refused as bridge acquisitions by all agents while remaining acceptable as direct " +
+      "wants; the invariant over a run is that no completed trade ever leaves any party holding a stale " +
+      "instance of a type other than its current want. The proposer-side condition gate forbids acquiring a " +
+      "stale good as a bridge — so an instance an agent just received in a trade is never both stale and not " +
+      "its want.",
+    evaluate: (): AssertionResult => {
+      let checkedRounds = 0;
+      let acquisitionsChecked = 0;
+      for (const f of structuralFixtures()) {
+        const cfg = f.config;
+        const state = createState(cfg, STRUCTURAL_SEED);
+        runSetup(state);
+        for (let round = 1; round <= cfg.constants.ROUND_CAP; round++) {
+          runRound(state);
+          checkedRounds++;
+          for (const a of state.agents) {
+            const held = a.held;
+            // Only instances acquired by a completed trade THIS round (no aging has
+            // touched them since the swap, so this is exactly the post-trade state).
+            if (held === null || held.acquiredRound !== round) continue;
+            acquisitionsChecked++;
+            const stage = stageOf(held.age, scheduleOf(cfg, held.type));
+            if (stage === "stale" && held.type !== a.want) {
+              return fail(
+                `${f.name} round ${round}: agent ${a.position} was left holding a stale non-want (good ${held.type}, want ${a.want}) by a completed trade`,
+              );
+            }
+          }
+        }
+      }
+      return pass(
+        `no completed trade left a party holding a stale non-want across ${checkedRounds} rounds (${acquisitionsChecked} trade acquisitions checked)`,
+        { acquisitionsChecked },
+      );
+    },
+  },
+  {
+    id: "B3",
+    criterion: "B3 — Recognizability reveal & fake exit accounting",
+    claim:
+      "Every instance created fake exits through an exit event and never as a satisfied want: a fake is " +
+      "destroyed on reveal (after a trade, or on attempted consumption) or — if it rots before discovery — on " +
+      "spoilage, and the per-channel conservation ledger attributes every one of those exits to the fake " +
+      "channel exactly. The RATE at which fakes are created is a distributional/campaign measurement and is " +
+      "not graded here.",
+    evaluate: (): AssertionResult => {
+      let fakeExitsLedger = 0;
+      let fakeExitEvents = 0;
+      let withFakes = 0;
+      for (const f of structuralFixtures()) {
+        const cfg = f.config;
+        const s = runToInternalState(cfg, STRUCTURAL_SEED);
+        const ledger = s.conservation.fake.reduce((acc, x) => acc + x, 0);
+        // Fake exits in the event stream: every FAKE_REVEAL, plus every SPOIL_DESTROY
+        // whose lost instance was fake (a fake lost to rot before discovery).
+        let events = 0;
+        for (const e of s.events) {
+          if (e.type === "FAKE_REVEAL") events++;
+          else if (e.type === "SPOIL_DESTROY" && e.wasFake) events++;
+        }
+        if (ledger !== events) {
+          return fail(`${f.name}: fake ledger (${ledger}) != fake exit events (${events}) — a fake exit was misattributed or lost`);
+        }
+        fakeExitsLedger += ledger;
+        fakeExitEvents += events;
+        if (ledger > 0) withFakes++;
+      }
+      if (withFakes === 0) return fail("no fixture produced a fake exit; the exit-accounting claim is untested");
+      return pass(
+        `every fake exit is attributed to the fake channel exactly: ${fakeExitsLedger} ledger exits == ${fakeExitEvents} exit events, over ${withFakes} fixtures with fakes (creation rate uncovered — campaign claim)`,
+        { fakeExits: fakeExitsLedger },
+      );
+    },
+  },
   {
     id: "B4.table",
     criterion: "B4 — Divisibility verdict purity",
@@ -407,13 +519,41 @@ const B: Assertion[] = [
       return pass("eligibility uses the mutual minimum radius; the bulky side's radius bounds the trade");
     },
   },
-  engineCriterion(
-    "B6",
-    "B6 — Desirability isolation",
-    "Changing a focal good's desirability reallocates want-share only against background filler goods; the " +
-      "other focal goods' want-shares stay fixed within tolerance, so a pairwise comparison is not moved by a " +
-      "third good's dial.",
-  ),
+  {
+    id: "B6",
+    criterion: "B6 — Desirability isolation",
+    claim:
+      "Changing a focal good's desirability reallocates want-share only against the background filler pool; " +
+      "the other focal goods' want-shares stay fixed by construction, so a pairwise comparison is never moved " +
+      "by a third good's dial. (The prior build's normalized demand made held-constant comparisons impossible " +
+      "— a third good's move shifted the narrated pairwise contest.)",
+    evaluate: (): AssertionResult => {
+      // Two configs differing ONLY in focal good 0's desirability level.
+      const base = smallContrastFixture();
+      const withGood0Desirability = (level: 0 | 1 | 2): Config => ({
+        ...base,
+        goods: base.goods.map((g) => (g.id === 0 ? { ...g, attributes: { ...g.attributes, desirability: level } } : g)),
+      });
+      const lo = withGood0Desirability(0);
+      const hi = withGood0Desirability(2);
+
+      // The OTHER focal good's want-share is identical across the two — fixed by construction.
+      const g1lo = wantShareOf(lo, 1);
+      const g1hi = wantShareOf(hi, 1);
+      if (Math.abs(g1lo - g1hi) > 1e-12) {
+        return fail(`good 1's want-share moved (${g1lo} -> ${g1hi}) when only good 0's desirability changed`);
+      }
+      // Good 0's share moved; the filler remainder absorbs exactly that delta.
+      const focalDelta = wantShareOf(hi, 0) - wantShareOf(lo, 0);
+      const fillerLo = 1 - wantShareOf(lo, 0) - g1lo;
+      const fillerHi = 1 - wantShareOf(hi, 0) - g1hi;
+      if (Math.abs(focalDelta) < 1e-12) return fail("good 0's desirability change did not move its want-share; the test is vacuous");
+      if (Math.abs(focalDelta + (fillerHi - fillerLo)) > 1e-12) {
+        return fail(`the filler pool did not absorb good 0's delta (focal +${focalDelta.toFixed(4)}, filler ${(fillerHi - fillerLo).toFixed(4)})`);
+      }
+      return pass(`good 0's desirability change moved ${focalDelta.toFixed(4)} of want-share entirely against the filler pool; good 1 unchanged`);
+    },
+  },
   campaignCriterion(
     "B7",
     "B7 — Scarcity injection (engine hook)",
@@ -540,6 +680,60 @@ const B: Assertion[] = [
       return pass("the agent excludes the deterministic refuser and falls through to a non-direct bridge proposal");
     },
   },
+  {
+    id: "B14",
+    criterion: "B14 — FIRST_BRIDGE_ACCEPT once per run + payload accuracy",
+    claim:
+      "FIRST_BRIDGE_ACCEPT fires at most once per run, on the first completed trade in which a party acquires a " +
+      "good that is not its current want; its payload names every qualifying party with the correct role, " +
+      "acquired good, and qualification label (proposer via bridge-targeted acquisition; accepter via " +
+      "tally-clause acceptance), per §10/D-028. Evaluated distributionally (H2).",
+    evaluate: (): AssertionResult => {
+      const seeds = deriveSeeds(STRUCTURAL_SEED, DEFAULT_BATCH_SIZE);
+      let runsWithEvent = 0;
+      for (const seed of seeds) {
+        const r = run(smallContrastFixture(), seed);
+        const fbaIdx = r.events.findIndex((e) => e.type === "FIRST_BRIDGE_ACCEPT");
+        const extra = r.events.filter((e) => e.type === "FIRST_BRIDGE_ACCEPT").length;
+        if (extra > 1) return fail(`seed ${seed}: FIRST_BRIDGE_ACCEPT fired ${extra} times (at most once per run)`);
+        if (fbaIdx < 0) continue;
+        runsWithEvent++;
+        const fba = r.events[fbaIdx]!;
+        const trade = r.events[fbaIdx - 1];
+        if (fba.type !== "FIRST_BRIDGE_ACCEPT") return fail(`seed ${seed}: internal — event mistyped`);
+        // It is emitted immediately after the qualifying completed trade in its round.
+        if (!trade || trade.type !== "TRADE" || trade.round !== fba.round) {
+          return fail(`seed ${seed}: FIRST_BRIDGE_ACCEPT was not emitted on a completed trade in its own round`);
+        }
+        if (fba.qualifiers.length === 0) return fail(`seed ${seed}: FIRST_BRIDGE_ACCEPT payload names no qualifying party`);
+        for (const q of fba.qualifiers) {
+          if (q.role === "proposer") {
+            if (q.party !== trade.proposer || q.acquiredGood !== trade.goodFromPartner || q.qualification !== "bridge-targeted acquisition") {
+              return fail(`seed ${seed}: proposer qualifier does not match the trade (party/acquiredGood/qualification)`);
+            }
+          } else if (q.role === "accepter") {
+            if (q.party !== trade.partner || q.acquiredGood !== trade.goodFromProposer || q.qualification !== "tally-clause acceptance") {
+              return fail(`seed ${seed}: accepter qualifier does not match the trade (party/acquiredGood/qualification)`);
+            }
+          } else {
+            return fail(`seed ${seed}: FIRST_BRIDGE_ACCEPT carries an unknown qualifier role`);
+          }
+        }
+        // If an accepter qualified, this is the FIRST viaBridge trade of the run.
+        if (fba.qualifiers.some((q) => q.role === "accepter")) {
+          const firstViaBridge = r.events.findIndex((e) => e.type === "TRADE" && e.viaBridge);
+          if (firstViaBridge !== fbaIdx - 1) {
+            return fail(`seed ${seed}: an accepter-qualified FIRST_BRIDGE_ACCEPT was not on the run's first via-bridge trade`);
+          }
+        }
+      }
+      if (runsWithEvent === 0) return fail("no run produced a FIRST_BRIDGE_ACCEPT; the criterion is untested");
+      return pass(
+        `FIRST_BRIDGE_ACCEPT fired at most once per run with a §10/D-028-accurate payload across ${seeds.length} seeds (${runsWithEvent} runs emitted it)`,
+        { runsWithEvent },
+      );
+    },
+  },
 ];
 
 // --- C. Round legibility -------------------------------------------------
@@ -592,25 +786,30 @@ const D: Assertion[] = [
     id: "D5.headroom",
     criterion: "D5 — Seed headroom (opening frame below dominance)",
     claim:
-      "Across all supported configurations, every good's seeded tally level sits strictly below the dominance " +
-      "threshold — no seeded prior, anywhere a chart can open, already shows the answer. (The companion clause, " +
-      "the winner rising above its seed at dominance, is a convergence/campaign measurement.)",
+      "On the structural fixtures this assertion runs, every good's seeded tally level sits below the dominance " +
+      "threshold by at least the registered D5_MARGIN — no seeded prior, anywhere a chart can open, already " +
+      "shows the answer. The headroom holds by CONSTRUCTION: load validation rejects any config with SEED_CAP > " +
+      "DOM_THRESHOLD - D5_MARGIN (G7), and this checks the realized priors honor it. The campaign-grade D5 — the " +
+      "same headroom across every teaching/synthesis/scaled configuration, plus the companion winner-rises-above-" +
+      "seed clause — is a D-series measurement (C0), not these fixtures' non-canonical constants (D3/D-023).",
     evaluate: (): AssertionResult => {
       for (const f of structuralFixtures()) {
         const cfg = f.config;
-        if (cfg.constants.SEED_CAP >= cfg.constants.DOM_THRESHOLD) {
-          return fail(`${f.name}: SEED_CAP ${cfg.constants.SEED_CAP} is not below DOM_THRESHOLD ${cfg.constants.DOM_THRESHOLD}`);
+        const ceiling = cfg.constants.DOM_THRESHOLD - cfg.constants.D5_MARGIN;
+        if (cfg.constants.SEED_CAP > ceiling + 1e-12) {
+          return fail(`${f.name}: SEED_CAP ${cfg.constants.SEED_CAP} exceeds DOM_THRESHOLD - D5_MARGIN (${ceiling})`);
         }
         const state = createState(cfg, STRUCTURAL_SEED);
         runSetup(state);
         for (const a of state.agents) {
           for (const p of a.prior) {
-            // score from prior alone (zero events) = K*p/(0+K) = p; must be below threshold.
-            if (p >= cfg.constants.DOM_THRESHOLD) return fail(`${f.name}: a seeded prior ${p} reaches the dominance threshold`);
+            // Score from prior alone (zero events) = K*p/(0+K) = p; it must sit at
+            // least D5_MARGIN below the dominance threshold.
+            if (p > ceiling + 1e-12) return fail(`${f.name}: a seeded prior ${p} sits within D5_MARGIN of the dominance threshold`);
           }
         }
       }
-      return pass("every seeded prior sits strictly below the dominance threshold across all fixtures");
+      return pass("on the structural fixtures it runs, every seeded prior honors the registered D5_MARGIN headroom below the dominance threshold");
     },
   },
   {
@@ -690,6 +889,106 @@ const D: Assertion[] = [
       return pass("a good with zero in-window trade evidence is never crowned dominant (the D7 trade floor bites)");
     },
   },
+  {
+    id: "D7.tradeFloor",
+    criterion: "D7 — Dominance requires evidence (per-capita trade floor)",
+    claim:
+      "A good can meet the acceptance-share threshold, the gap, and the rise and STILL not be crowned when its " +
+      "in-window TRADE events fall below the per-capita floor (DOM_MIN_TRADE_SHARE x N). A good that trades once " +
+      "and then coasts on the absence of negative evidence is never money. Lifted into the named acceptance " +
+      "battery from the detector unit tests (V-38).",
+    evaluate: (): AssertionResult => {
+      const cfg = detectorControlConfig();
+      const W = 1;
+      const floor = cfg.constants.DOM_MIN_TRADE_SHARE * cfg.ringSize; // per-capita: x N
+      // Run DOM_SUSTAIN high rounds for good 0 with a given in-window trade count;
+      // round 1 seeds a LOW first-defined A so the rise clause is satisfied later.
+      const crownedWithTrades = (trade: number): number => {
+        const state = createState(cfg, STRUCTURAL_SEED);
+        const g0 = state.goodStats[0]!;
+        const g1 = state.goodStats[1]!;
+        setDetectorBucket(g0, 1, W, 0, 1, trade); setDetectorBucket(g1, 1, W, 1, 10, 0); stepStatistics(state, 1, []);
+        for (const r of [2, 3, 4]) { setDetectorBucket(g0, r, W, 9, 10, trade); setDetectorBucket(g1, r, W, 1, 10, 0); stepStatistics(state, r, []); }
+        return dominanceCount(state.events, 0);
+      };
+      if (crownedWithTrades(0) !== 0) return fail("a good below the per-capita trade floor was crowned dominant");
+      if (crownedWithTrades(Math.ceil(floor)) === 0) return fail("a good meeting all four clauses including the trade floor was not crowned");
+      return pass(`the per-capita trade floor (DOM_MIN_TRADE_SHARE x N = ${floor}) gates dominance: below it never crowned, at it crowned`);
+    },
+  },
+  {
+    id: "D7.rise",
+    criterion: "D7 — Dominance requires evidence (rise above first value)",
+    claim:
+      "A good whose acceptance share at detection has not risen above its FIRST defined value of the run by " +
+      "DOM_RISE_MIN is never crowned — a line that opens at the ceiling never 'rose,' so a seeded head start " +
+      "cannot masquerade as emergence. Lifted into the named acceptance battery from the detector unit tests " +
+      "(V-38).",
+    evaluate: (): AssertionResult => {
+      const cfg = detectorControlConfig();
+      const W = 1;
+      // Opens high (first-defined A ~ 0.9) and stays high: rise == 0 -> never crowned,
+      // though threshold, gap and trade floor all hold every round.
+      const opensHigh = (): number => {
+        const state = createState(cfg, STRUCTURAL_SEED);
+        const g0 = state.goodStats[0]!;
+        const g1 = state.goodStats[1]!;
+        for (const r of [1, 2, 3, 4]) { setDetectorBucket(g0, r, W, 9, 10, 6); setDetectorBucket(g1, r, W, 1, 10, 0); stepStatistics(state, r, []); }
+        return dominanceCount(state.events, 0);
+      };
+      // Opens low and rises to the same high level: rise satisfied -> crowned.
+      const risesFromLow = (): number => {
+        const state = createState(cfg, STRUCTURAL_SEED);
+        const g0 = state.goodStats[0]!;
+        const g1 = state.goodStats[1]!;
+        setDetectorBucket(g0, 1, W, 0, 1, 6); setDetectorBucket(g1, 1, W, 1, 10, 0); stepStatistics(state, 1, []);
+        for (const r of [2, 3, 4]) { setDetectorBucket(g0, r, W, 9, 10, 6); setDetectorBucket(g1, r, W, 1, 10, 0); stepStatistics(state, r, []); }
+        return dominanceCount(state.events, 0);
+      };
+      if (opensHigh() !== 0) return fail("a good that opened at the ceiling (zero rise) was crowned dominant");
+      if (risesFromLow() === 0) return fail("a good that rose from a low first value to dominance was not crowned");
+      return pass("the rise clause gates dominance: opening at the ceiling never 'rose' and is not crowned; rising from a low first value is");
+    },
+  },
+  {
+    id: "D8",
+    criterion: "D8 — Dominance event semantics",
+    claim:
+      "Dominance is unique per round (at most one DOMINANCE event in any single round) and non-terminal (it may " +
+      "lapse and re-fire, and several goods may fire across a run — so multiple DOMINANCE events across rounds " +
+      "are permitted, not an error). CAP_REACHED fires at the cap IFF no DOMINANCE event fired in the run (a " +
+      "has-dominated predicate), and equals reachedCap. The run result carries NO scalar dominant-good field; " +
+      "any end-state winner is read from the DOMINANCE stream, with which it agrees by construction (D-040/V-20). " +
+      "Evaluated distributionally (H2).",
+    evaluate: (): AssertionResult => {
+      const seeds = deriveSeeds(STRUCTURAL_SEED, DEFAULT_BATCH_SIZE);
+      const invariantHeld: boolean[] = [];
+      for (const seed of seeds) {
+        const r = run(smallContrastFixture(), seed);
+        // No scalar dominant-good field on the result (D-040).
+        if ("dominantGood" in (r as object)) return fail(`seed ${seed}: the run result carries a scalar dominantGood field (D-040 forbids it)`);
+        // Per-round uniqueness: at most one DOMINANCE event in any single round.
+        const perRound = new Map<number, number>();
+        for (const e of r.events) if (e.type === "DOMINANCE") perRound.set(e.round, (perRound.get(e.round) ?? 0) + 1);
+        for (const [round, count] of perRound) {
+          if (count > 1) return fail(`seed ${seed} round ${round}: ${count} DOMINANCE events in one round (per-round uniqueness violated)`);
+        }
+        // CAP_REACHED <-> no DOMINANCE <-> reachedCap.
+        const anyDominance = r.events.some((e) => e.type === "DOMINANCE");
+        const caps = r.events.filter((e) => e.type === "CAP_REACHED").length;
+        if (caps > 1) return fail(`seed ${seed}: ${caps} CAP_REACHED events (at most one per run)`);
+        const capFired = caps === 1;
+        if (capFired !== !anyDominance) return fail(`seed ${seed}: CAP_REACHED (${capFired}) != no-DOMINANCE-in-run (${!anyDominance})`);
+        if (r.reachedCap !== capFired) return fail(`seed ${seed}: reachedCap (${r.reachedCap}) != CAP_REACHED fired (${capFired})`);
+        invariantHeld.push(true);
+      }
+      const rate = passRate(invariantHeld);
+      return pass(
+        `across ${seeds.length} seeds: per-round DOMINANCE uniqueness holds, CAP_REACHED <-> no-DOMINANCE <-> reachedCap (${rate.hits}/${rate.total}), and no result carries a scalar dominant good`,
+        { seeds: seeds.length },
+      );
+    },
+  },
 ];
 
 // --- E. Scaling and regional behavior -----------------------------------
@@ -728,25 +1027,25 @@ const G: Assertion[] = [
     id: "G2",
     criterion: "G2 — Degenerate settings don't crash",
     claim:
-      "Degenerate markets — a single good, or an all-refusal frozen market — run to the round limit without " +
-      "error and present a defined 'no convergence' outcome, rather than crashing or coercing a winner.",
+      "A degenerate market — here a single-good world, where every agent's want support is empty after homeGood " +
+      "exclusion (want = NONE) and no trade can occur — runs to its round limit without error and resolves to a " +
+      "defined no-convergence outcome, never crashing or coercing a winner. Evaluated over a seed batch (H2), " +
+      "not a single run.",
     evaluate: (): AssertionResult => {
-      // The single-good and frozen fixtures are the degenerate cases reachable today.
-      const degenerate = structuralFixtures().filter((f) => /degenerate|frozen/.test(f.name));
-      for (const f of degenerate) {
+      const cfg = singleGoodPerishableFixture(); // the want = NONE single-good degenerate (V-36)
+      const seeds = deriveSeeds(STRUCTURAL_SEED, DEFAULT_BATCH_SIZE);
+      for (const seed of seeds) {
         let r;
         try {
-          r = run(f.config, STRUCTURAL_SEED);
+          r = run(cfg, seed);
         } catch (e) {
-          return fail(`${f.name} threw instead of running to the cap: ${(e as Error).message}`);
+          return fail(`single-good degenerate threw at seed ${seed} instead of running to the cap: ${(e as Error).message}`);
         }
-        if (r.telemetry.length !== f.config.constants.ROUND_CAP) {
-          return fail(`${f.name} did not run to its round cap`);
-        }
-        // Authority is the DOMINANCE event stream, not a scalar field (D-040).
-        if (r.events.some((e) => e.type === "DOMINANCE")) return fail(`${f.name} coerced a winner in a degenerate market`);
+        if (r.telemetry.length !== cfg.constants.ROUND_CAP) return fail(`seed ${seed}: did not run to its round cap`);
+        if (r.events.some((e) => e.type === "DOMINANCE")) return fail(`seed ${seed}: coerced a winner in a degenerate market`);
+        if (!r.reachedCap) return fail(`seed ${seed}: no defined no-convergence outcome (reachedCap not set)`);
       }
-      return pass(`${degenerate.length} degenerate fixtures ran to the cap with a defined no-convergence outcome`);
+      return pass(`the single-good (want=NONE) degenerate ran to the cap with a defined no-convergence outcome across ${seeds.length} seeds`, { seeds: seeds.length });
     },
   },
   {
@@ -754,20 +1053,93 @@ const G: Assertion[] = [
     criterion: "G3 — No-convergence is a defined outcome",
     claim:
       "A run that reaches the round limit without a dominance verdict reports that state explicitly — it emits " +
-      "CAP_REACHED, records reachedCap, and names no dominant good — and is never dressed up as a weak win.",
+      "CAP_REACHED exactly once and records reachedCap — and is never dressed up as a weak win. Evaluated " +
+      "distributionally (H2): across a seed batch every run resolves to exactly one of {converged, capped}, and " +
+      "the capped runs are the explicitly-flagged no-convergence outcome.",
     evaluate: (): AssertionResult => {
-      const r = run(structuralFixtures().find((f) => /frozen/.test(f.name))!.config, STRUCTURAL_SEED);
-      // No DOMINANCE event ever fired — the run named no dominant good (D-040).
-      if (r.events.some((e) => e.type === "DOMINANCE")) return fail("the frozen fixture unexpectedly converged");
-      const capEvents = r.events.filter((e) => e.type === "CAP_REACHED").length;
-      if (capEvents !== 1) return fail(`expected exactly one CAP_REACHED, saw ${capEvents}`);
-      if (!r.reachedCap) return fail("reachedCap was not set on a non-converging run");
-      return pass("the non-converging run emits CAP_REACHED once and records reachedCap with no dominant good");
+      const seeds = deriveSeeds(STRUCTURAL_SEED, DEFAULT_BATCH_SIZE);
+
+      // (a) The single-good degenerate always reaches the cap: CAP_REACHED is the
+      //     defined no-convergence outcome, demonstrated across the batch.
+      const degen = singleGoodPerishableFixture();
+      for (const seed of seeds) {
+        const r = run(degen, seed);
+        const caps = r.events.filter((e) => e.type === "CAP_REACHED").length;
+        if (caps !== 1 || !r.reachedCap || r.events.some((e) => e.type === "DOMINANCE")) {
+          return fail(`single-good seed ${seed}: expected one CAP_REACHED + reachedCap + no DOMINANCE (caps=${caps}, reachedCap=${r.reachedCap})`);
+        }
+      }
+
+      // (b) A real two-focal market splits between converging and capping across
+      //     seeds; EVERY run is cleanly classified, and the capped runs are flagged.
+      //     smallContrast is NOT frozen — it converges in a minority of seeds — so
+      //     this reports the actual split and drops the false "never converges"
+      //     claim (V-14/V-36).
+      const market = smallContrastFixture();
+      let converged = 0;
+      let capped = 0;
+      for (const seed of seeds) {
+        const r = run(market, seed);
+        const dominated = r.events.some((e) => e.type === "DOMINANCE");
+        const caps = r.events.filter((e) => e.type === "CAP_REACHED").length;
+        if (dominated && caps === 0 && !r.reachedCap) { converged++; continue; }
+        if (!dominated && caps === 1 && r.reachedCap) { capped++; continue; }
+        return fail(`market seed ${seed}: neither cleanly converged nor cleanly capped (dominated=${dominated}, caps=${caps}, reachedCap=${r.reachedCap})`);
+      }
+      if (converged + capped !== seeds.length) return fail("a run was classified as both or neither outcome");
+      if (capped === 0) return fail("no run reached the cap; the no-convergence outcome was never exercised in the batch");
+      return pass(`across ${seeds.length} seeds every run is cleanly converged-xor-capped (${converged} converged, ${capped} capped); CAP_REACHED is a first-class flagged outcome`, { converged, capped });
     },
   },
-  campaignCriterion("G4", "G4 — Bounded across the controls",
-    "Non-convergence rate stays at or below the registered ceiling across the ENTIRE range of every " +
-      "learner-exposed control (population, speed, good count) — not only at defaults."),
+  {
+    id: "G4",
+    criterion: "G4 — Bounded across the controls (D7 trade-floor denomination)",
+    claim:
+      "The D7 live-evidence floor is denominated correctly across the control range, not in raw event counts " +
+      "(B10): it is per-capita (DOM_MIN_TRADE_SHARE x N, so it scales with the population control), and the " +
+      "in-window TRADE count spans WINDOW_ROUNDS (so the effective per-round bar scales with the window, V-17). " +
+      "B10's static table audit cannot catch this base-mixing; this dynamic check does. The concrete " +
+      "non-convergence-rate bar at the tuned control extremes is a C0 measurement (V-23).",
+    evaluate: (): AssertionResult => {
+      // (a) Per-capita: the SAME in-window trade count is crowned at a small N and
+      //     rejected at a larger N, because the floor is DOM_MIN_TRADE_SHARE x N. A
+      //     raw-count floor could not flip the verdict on N alone.
+      const W1 = 1;
+      const crownedAtN = (n: number, trade: number): number => {
+        const cfg = detectorConfigN(n, W1);
+        const state = createState(cfg, STRUCTURAL_SEED);
+        const g0 = state.goodStats[0]!;
+        const g1 = state.goodStats[1]!;
+        setDetectorBucket(g0, 1, W1, 0, 1, trade); setDetectorBucket(g1, 1, W1, 1, 10, 0); stepStatistics(state, 1, []);
+        for (const r of [2, 3, 4]) { setDetectorBucket(g0, r, W1, 9, 10, trade); setDetectorBucket(g1, r, W1, 1, 10, 0); stepStatistics(state, r, []); }
+        return dominanceCount(state.events, 0);
+      };
+      // N=6 -> floor 0.6; one trade clears it -> crowned. N=20 -> floor 2.0; one
+      // trade does NOT clear it -> not crowned. Same trade count, verdict flips on N.
+      if (crownedAtN(6, 1) === 0) return fail("a good clearing the per-capita floor at small N was not crowned");
+      if (crownedAtN(20, 1) !== 0) return fail("the floor did not scale with N — a raw-count floor would crown the same good at large N (B10 base-mixing)");
+
+      // (b) Window-spanning: at N=20 (floor 2.0) one trade PER ROUND clears the
+      //     floor only once the window spans >= 2 rounds, so its in-window count
+      //     accumulates to 2. The effective per-round bar scales with WINDOW_ROUNDS.
+      const crownedWithWindow = (window: number): number => {
+        const cfg = detectorConfigN(20, window);
+        const state = createState(cfg, STRUCTURAL_SEED);
+        const g0 = state.goodStats[0]!;
+        const g1 = state.goodStats[1]!;
+        for (let r = 1; r <= 6; r++) {
+          const pos = r === 1 ? 0 : 9;
+          const tot = r === 1 ? 1 : 10;
+          setDetectorBucket(g0, r, window, pos, tot, 1); setDetectorBucket(g1, r, window, 1, 10, 0);
+          stepStatistics(state, r, []);
+        }
+        return dominanceCount(state.events, 0);
+      };
+      if (crownedWithWindow(1) !== 0) return fail("with a 1-round window, one trade/round (1 < floor 2.0) wrongly crowned a good");
+      if (crownedWithWindow(2) === 0) return fail("with a 2-round window, the in-window count (2 >= floor 2.0) should clear the floor and crown");
+      return pass("the D7 floor is per-capita (scales with N) and window-spanning (in-window count spans WINDOW_ROUNDS); concrete control-extreme bar set at C0");
+    },
+  },
   campaignCriterion("G5", "G5 — Near-identical inputs get honest verdicts",
     "A configuration is 'too close to call' when its winner distribution over a QA batch is contested past " +
       "the registered threshold; coin-flip markets never receive confident causal verdicts, and the harness " +
@@ -793,6 +1165,38 @@ const G: Assertion[] = [
         }
       }
       return pass(`every one of ${checked} reported acceptance shares is NO_EVIDENCE or finite`, { checked });
+    },
+  },
+  {
+    id: "G7",
+    criterion: "G7 — Invalid configs are rejected",
+    claim:
+      "Load-time validation rejects — never silently normalizes — any configuration violating a registered §2.4 " +
+      "validity precondition: focal want-share sum > 1 - FILLER_MIN_SHARE (R-34); SEED_CAP > DOM_THRESHOLD - " +
+      "D5_MARGIN (D-016/D-056); DOM_SUSTAIN < 1 (V-05). A valid configuration is accepted unchanged.",
+    evaluate: (): AssertionResult => {
+      const base = smallContrastFixture();
+      try {
+        validateConfig(base);
+      } catch (e) {
+        return fail(`the baseline valid config was rejected: ${(e as Error).message}`);
+      }
+      // Each must be REJECTED at load (a throw); a silent acceptance is the failure.
+      const mustReject = (label: string, cfg: Config): AssertionResult | null => {
+        try {
+          validateConfig(cfg);
+        } catch {
+          return null; // rejected as required
+        }
+        return fail(`${label}: an invalid config was accepted, not rejected at load (silent normalization is forbidden)`);
+      };
+      const r1 = mustReject("focal want-share sum > 1 - FILLER_MIN_SHARE", { ...base, constants: { ...base.constants, FILLER_MIN_SHARE: 0.95 } });
+      if (r1) return r1;
+      const r2 = mustReject("SEED_CAP > DOM_THRESHOLD - D5_MARGIN", { ...base, constants: { ...base.constants, SEED_CAP: 0.6 } });
+      if (r2) return r2;
+      const r3 = mustReject("DOM_SUSTAIN < 1", { ...base, constants: { ...base.constants, DOM_SUSTAIN: 0 } });
+      if (r3) return r3;
+      return pass("load validation rejects all three §2.4 validity preconditions (want-share ceiling, SEED_CAP/D5_MARGIN headroom, DOM_SUSTAIN >= 1) and accepts a valid config");
     },
   },
 ];
@@ -864,13 +1268,22 @@ const H: Assertion[] = [
     id: "H3",
     criterion: "H3 — Criteria-version stamp & run record",
     claim:
-      "Every run records the four things needed to adjudicate it later — its seed, a hash of its full " +
-      "configuration, the engine version, and the criteria version it is judged against — so a disputed " +
-      "number can always be re-derived against the right bar.",
+      "Every run stamps the criteria version it was judged against, and this assertion anchors that stamp on the " +
+      "GOVERNING criteria version this battery encodes — not a self-referential equality of the stamp against " +
+      "itself, which passes while silently recording a superseded bar (the failure V-18/V-34 caught). If " +
+      "CRITERIA_VERSION drifts from the governing version, this fails. The record also carries the seed, the " +
+      "engine version, and a canonical integrity hash of the full configuration.",
     evaluate: (): AssertionResult => {
-      // The version/seed stamp is recorded for every run, from a real config.
+      // The criteria document this battery is written against. It is bumped in
+      // lockstep with the criteria adoption (review protocol v1.2 / D-048); this
+      // assertion is the backstop that fails if the in-code stamp drifts from it,
+      // rather than comparing the stamp to itself (V-18/V-34).
+      const GOVERNING_CRITERIA = "criteria-v2.3";
+      if (CRITERIA_VERSION !== GOVERNING_CRITERIA) {
+        return fail(`CRITERIA_VERSION "${CRITERIA_VERSION}" != the governing criteria this battery encodes ("${GOVERNING_CRITERIA}") — the harness would record a superseded bar`);
+      }
       const rec = makeRunRecord(structuralFixtures()[0]!.config, 1231006505);
-      if (rec.criteriaVersion !== CRITERIA_VERSION) return fail("run record does not stamp the criteria version");
+      if (rec.criteriaVersion !== GOVERNING_CRITERIA) return fail("run record does not stamp the governing criteria version");
       if (rec.engineVersion !== ENGINE_VERSION) return fail("run record does not stamp the engine version");
       if (rec.seed !== 1231006505) return fail("run record does not preserve the seed");
       // The integrity hash (D-042) is canonical: key order does not change it, and
@@ -881,26 +1294,32 @@ const H: Assertion[] = [
       const hashB = hashConfig({ mode: "small", ringSize: 11, note: "fixture" });
       if (hashA !== hashAReordered) return fail("config hash changed under key reordering (not canonical)");
       if (hashA === hashB) return fail("config hash collided for materially different configs");
-      return pass(`run record stamps {seed, full config + integrity hash, engine=${ENGINE_VERSION}, criteria=${CRITERIA_VERSION}} and the hash is canonical`);
+      return pass(`stamp anchored on the governing criteria version (${GOVERNING_CRITERIA}); record carries seed + engine ${ENGINE_VERSION} + full config + canonical integrity hash`);
     },
   },
   {
     id: "H4",
     criterion: "H4 — Learner runs are replayable",
     claim:
-      "Every run records the four things needed to reproduce it after the fact — its seed, a hash of its full " +
-      "configuration, the engine version, and the criteria version — and re-running from that record reproduces " +
-      "the run exactly. No outcome a grading surface judges is ever unexaminable.",
+      "Every learner-facing run records its seed and its FULL configuration, and replays from that record ALONE " +
+      "— no external config supplied. Record-self-sufficiency is the test (D-042): a stored run is re-runnable " +
+      "after the fact from what it stored, reproducing the run bit-for-bit. A config hash can only verify a " +
+      "configuration you already hold; it cannot reconstruct one for a run pulled from storage, so the record " +
+      "carries the configuration itself, the hash only as an integrity field.",
     evaluate: (): AssertionResult => {
       const f = structuralFixtures()[0]!;
       const r = run(f.config, STRUCTURAL_SEED);
+      // The record must carry the FULL configuration, not just a hash (D-042).
+      if (r.record.config === undefined) return fail("run record carries no configuration — it cannot be replayed from the record alone");
       if (r.record.seed !== STRUCTURAL_SEED) return fail("run record does not preserve the seed");
-      if (!r.record.configHash) return fail("run record carries no config hash");
       if (r.record.engineVersion !== ENGINE_VERSION) return fail("run record does not stamp the engine version");
       if (r.record.criteriaVersion !== CRITERIA_VERSION) return fail("run record does not stamp the criteria version");
-      const replay = run(f.config, r.record.seed);
-      if (serializeRun(r) !== serializeRun(replay)) return fail("replay from the recorded seed did not reproduce the run");
-      return pass("the run record carries {seed, configHash, engineVersion, criteriaVersion} and replays exactly");
+      // The hash is an integrity field over the stored config, never the config itself.
+      if (r.record.configHash !== hashConfig(r.record.config)) return fail("the record's integrity hash does not match its stored configuration");
+      // Replay from the RECORD ALONE — its stored config and seed, no external config object.
+      const replay = run(r.record.config, r.record.seed);
+      if (serializeRun(r) !== serializeRun(replay)) return fail("replay from the record alone did not reproduce the run");
+      return pass("the run replays bit-for-bit from its record alone (full configuration + seed); the record is self-sufficient (L-46 closed)");
     },
   },
   campaignCriterion("H5", "H5 — The acceptance harness asserts",
