@@ -5,13 +5,29 @@
   "description": "Simulation engines and acceptance harnesses for a bitcoin education product.",
   "license": "UNLICENSED",
   "type": "module",
+  "main": "./dist/engines/emergence/index.js",
+  "module": "./dist/engines/emergence/index.js",
+  "types": "./dist/engines/emergence/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/engines/emergence/index.d.ts",
+      "import": "./dist/engines/emergence/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "engines",
+    "harness"
+  ],
   "scripts": {
     "typecheck": "tsc --noEmit",
+    "build": "tsc -p tsconfig.build.json",
     "harness": "node --import tsx harness/run.ts",
     "selftest": "node --import tsx harness/self-test.ts",
     "engine-selftest": "node --import tsx harness/engine-selftest.ts",
     "selftest:topology": "node --import tsx selftests/topology.ts",
-    "test": "node --import tsx harness/self-test.ts && node --import tsx harness/engine-selftest.ts && node --import tsx harness/run.ts && node --import tsx selftests/topology.ts"
+    "test": "node --import tsx harness/self-test.ts && node --import tsx harness/engine-selftest.ts && node --import tsx harness/run.ts && node --import tsx selftests/topology.ts",
+    "verify:packaged": "npm run build && tsc -p tsconfig.packaging.json && node --import tsx packaging/built-pin-check.ts"
   },
   "devDependencies": {
     "@types/node": "^25.9.2",

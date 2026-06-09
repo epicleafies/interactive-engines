@@ -1,0 +1,29 @@
+{
+  // Isolated PACKAGE build target (build-order: consumable-packaging workstream).
+  //
+  // Separate from the dev/test setup on purpose: the default tsconfig.json is
+  // `noEmit` and the harness/selftest/test run under tsx (which executes the .ts
+  // sources directly). This target instead EMITS the published artifact — runnable
+  // JS plus .d.ts — for `import { run } from "interactive-engines"`, and changes
+  // nothing about how the existing `typecheck` / `harness` / `selftest` / `test`
+  // scripts run.
+  //
+  // It compiles only the public entry's dependency closure (engines/emergence/
+  // index.ts and the harness modules it transitively needs: prng, replay, hash,
+  // version — all pure, no host imports), not the whole harness battery.
+  //
+  // The sources use explicit `.ts` import specifiers (a tsx/bundler convention);
+  // `rewriteRelativeImportExtensions` (TS 5.7+) rewrites them to `.js` in the
+  // emitted JS and .d.ts so the package resolves at runtime under plain Node ESM.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "declaration": true,
+    "sourceMap": true,
+    "rewriteRelativeImportExtensions": true,
+    "rootDir": ".",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
+  },
+  "include": ["engines/emergence/index.ts"]
+}

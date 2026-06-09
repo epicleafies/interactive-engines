@@ -1,0 +1,11 @@
+{
+  // Typecheck-only target for the packaging gate (packaging/built-pin-check.ts).
+  //
+  // Kept separate from the main tsconfig `include` so the default `typecheck`
+  // never depends on a build: this config resolves `interactive-engines` through
+  // the package `exports` -> emitted `dist/` declarations, so it must run AFTER
+  // `npm run build`. That resolution succeeding IS the proof that the package
+  // entry both resolves and is typed. `npm run verify:packaged` wires the order.
+  "extends": "./tsconfig.json",
+  "include": ["packaging/**/*.ts"]
+}
