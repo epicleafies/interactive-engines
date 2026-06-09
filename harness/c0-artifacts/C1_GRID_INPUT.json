@@ -1,0 +1,96 @@
+{
+  "beat": "C1",
+  "focal": "desirability",
+  "register": "D-066 (want-share sweep expansion; D-057 successor)",
+  "bar": {
+    "value": 0.9,
+    "kind": "focal-relative top-acceptance-share pass rate",
+    "source": "D-058 (C1-scoped); NOT lowered (D-059)"
+  },
+  "frame": {
+    "n": 16,
+    "filler": 1,
+    "note": "C1 teaching frame — where the registered grid reached 0.80 (D-065)"
+  },
+  "held": {
+    "midNeutral": 0.15,
+    "midNeutralSource": "D-024(b) — the desirability neutral the C3/C4 rounds use; held fixed so D-065's C3/C4 cells are unperturbed",
+    "constants": "C0_CONSTANTS_VILLAGE (D-057)"
+  },
+  "constraints": {
+    "fillerMinShare": 0.25,
+    "focalSumUpperBound": 0.75,
+    "bornDominanceFilter": "D-069 (re-measured): a cell's favored good is BORN-DOMINANT iff its A(g) is sustained >= 0.85 (1 - DOM_RISE_MIN) across the first 12 rounds (WINDOW_ROUNDS) from its first stably-defined value (n>=2 events); else EMERGED. Replaces the confounded first-defined A(g)=1.0 rise filter (D-066 c2). Harness-side; NOT the engine DOMINANT(g)."
+  },
+  "seeds": {
+    "base": 20260608,
+    "count": 50
+  },
+  "grid": [
+    {
+      "label": "high=0.25",
+      "kind": "high-axis",
+      "low": 0.08,
+      "mid": 0.15,
+      "high": 0.25,
+      "focalSum": 0.48
+    },
+    {
+      "label": "high=0.30",
+      "kind": "high-axis",
+      "low": 0.08,
+      "mid": 0.15,
+      "high": 0.3,
+      "focalSum": 0.53
+    },
+    {
+      "label": "high=0.35",
+      "kind": "high-axis",
+      "low": 0.08,
+      "mid": 0.15,
+      "high": 0.35,
+      "focalSum": 0.58
+    },
+    {
+      "label": "high=0.40",
+      "kind": "high-axis",
+      "low": 0.08,
+      "mid": 0.15,
+      "high": 0.4,
+      "focalSum": 0.63
+    },
+    {
+      "label": "high=0.45",
+      "kind": "high-axis",
+      "low": 0.08,
+      "mid": 0.15,
+      "high": 0.45,
+      "focalSum": 0.68
+    },
+    {
+      "label": "high=0.50",
+      "kind": "high-axis",
+      "low": 0.08,
+      "mid": 0.15,
+      "high": 0.5,
+      "focalSum": 0.73
+    },
+    {
+      "label": "high=0.52",
+      "kind": "high-axis",
+      "low": 0.08,
+      "mid": 0.15,
+      "high": 0.52,
+      "focalSum": 0.75
+    },
+    {
+      "label": "legibility:high=0.50,low=0.05",
+      "kind": "legibility",
+      "low": 0.05,
+      "mid": 0.15,
+      "high": 0.5,
+      "focalSum": 0.7
+    }
+  ],
+  "note": "Pinned grid (D-066, operator-approved). Recorded pre-run (H6). Swept EXACTLY as listed. The result is re-classified under the D-069 born-dominance measure — the deterministic runs (config+seed) are byte-identical to the committed run; only the harness-side classifier changed (no re-run, no engine change, no re-pin)."
+}
