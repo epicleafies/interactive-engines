@@ -1,0 +1,29 @@
+{
+  "register": "D-063",
+  "beats": [
+    {
+      "id": "C1",
+      "focal": "desirability",
+      "metric": "acceptance",
+      "feasible": false,
+      "teachingCell": "N×filler=N=16,f=1",
+      "cells": 17
+    },
+    {
+      "id": "C3",
+      "focal": "durability",
+      "metric": "persistence",
+      "feasible": true,
+      "teachingCell": "N×filler=N=16,f=3",
+      "cells": 17
+    },
+    {
+      "id": "C4",
+      "focal": "divisibility",
+      "metric": "circulation",
+      "feasible": true,
+      "teachingCell": "N×filler=N=16,f=1",
+      "cells": 15
+    }
+  ]
+}

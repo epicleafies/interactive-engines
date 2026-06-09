@@ -1,0 +1,83 @@
+C0 village re-run — per-dimension bars (criteria v2.4; D-059/060/061/063; 50-seed batches)
+bars C0-FILLED per H6 (D-057(a)); teaching cell cited; · = robustness cell (not a teaching candidate)
+
+=== C1 (desirability, metric=acceptance) ===
+    NOT REACHED — no teaching cell meets the bar (C0-escape candidate; register ruling, not a bar move)
+    teaching cell: N×filler=N=16,f=1
+    pass-rate bar = 0.900  [registered D-057(e)/D-058 (C1 keeps the focal-relative A(g) round bar; not C0-derived)]
+  [    ] N×filler=N=16,f=1    pass=0.800  noEv=0.000 cap=0.600 | favA=0.749
+  [    ] focal-lever=want-hi=0.35,f=1 pass=0.780  noEv=0.040 cap=0.620 | favA=0.754
+  [    ] N×filler=N=10,f=1    pass=0.760  noEv=0.080 cap=0.720 | favA=0.661
+  [    ]·DOM×WINDOW=dom=0.5,win=16 pass=0.740  noEv=0.020 cap=0.680 | favA=0.685
+  [    ]·DOM×WINDOW=dom=0.5,win=8 pass=0.720  noEv=0.040 cap=0.620 | favA=0.693
+  [    ] N×filler=N=12,f=1    pass=0.700  noEv=0.060 cap=0.680 | favA=0.646
+  [    ]·DOM×WINDOW=dom=0.75,win=12 pass=0.700  noEv=0.060 cap=0.700 | favA=0.646
+  [    ]·DOM×WINDOW=dom=1,win=12 pass=0.700  noEv=0.060 cap=0.700 | favA=0.646
+  [    ] N×filler=N=12,f=3    pass=0.120  noEv=0.400 cap=0.640 | favA=0.088
+  [    ] N×filler=N=16,f=3    pass=0.120  noEv=0.360 cap=0.540 | favA=0.068
+  [    ] N×filler=N=16,f=5    pass=0.100  noEv=0.500 cap=0.720 | favA=0.070
+  [    ] N×filler=N=10,f=3    pass=0.080  noEv=0.320 cap=0.740 | favA=0.053
+  [    ] N×filler=N=12,f=5    pass=0.020  noEv=0.640 cap=0.900 | favA=0.020
+  [    ] placement=blocked,f=1 pass=0.020  noEv=0.220 cap=0.900 | favA=0.004
+  [    ] N×filler=N=10,f=5    pass=0.000  noEv=0.720 cap=0.960 | favA=0.000
+  [    ] placement=blocked,f=5 pass=0.000  noEv=0.440 cap=0.960 | favA=0.000
+  [    ] focal-lever=want-hi=0.35,f=5 pass=0.000  noEv=0.540 cap=0.900 | favA=0.001
+
+=== C3 (durability, metric=persistence) ===
+    FEASIBLE — the teaching cell meets its pass-rate bar
+    teaching cell: N×filler=N=16,f=3
+    C0-filled bars (H6 — for closing-entry ratification):
+      persistence pass rate (runs demonstrating the lesson) = 0.800  [H6: down 20% from observed 1.000; failable]
+        basis: teaching cell N×filler=N=16,f=3: fraction of runs passing the derived margin bar
+      persistence visible-margin floor (favored − worst) = 0.500  [H6: down 20% from observed 0.635; failable]
+        basis: teaching cell N×filler=N=16,f=3: 5th-pct favored−worst margin over defined runs
+      tolerated favored NO_EVIDENCE rate (A(g) convention; §9.1) = 0.000  [H6: up 20% from observed 0.000; failable]
+        basis: teaching cell N×filler=N=16,f=3: favored-good NO_EVIDENCE rate
+  [PASS] N×filler=N=16,f=3    pass=1.000  noEv=0.000 cap=0.260 | fav=1.000 worst=0.233 margin[mean/p05]=0.767/0.635 ordered=0.900
+  [PASS] N×filler=N=12,f=3    pass=0.960  noEv=0.000 cap=0.220 | fav=1.000 worst=0.297 margin[mean/p05]=0.703/0.515 ordered=0.820
+  [PASS] N×filler=N=16,f=5    pass=0.960  noEv=0.000 cap=0.740 | fav=1.000 worst=0.188 margin[mean/p05]=0.812/0.611 ordered=0.700
+  [PASS] placement=blocked,f=1 pass=0.960  noEv=0.020 cap=0.920 | fav=1.000 worst=0.116 margin[mean/p05]=0.882/0.715 ordered=0.520
+  [PASS] focal-lever=spoil=(3,2),f=5 pass=0.960  noEv=0.020 cap=0.760 | fav=1.000 worst=0.202 margin[mean/p05]=0.794/0.627 ordered=0.620
+  [PASS] N×filler=N=12,f=5    pass=0.940  noEv=0.060 cap=0.840 | fav=1.000 worst=0.077 margin[mean/p05]=0.921/0.773 ordered=0.760
+  [PASS] N×filler=N=10,f=3    pass=0.920  noEv=0.060 cap=0.600 | fav=1.000 worst=0.175 margin[mean/p05]=0.815/0.594 ordered=0.680
+  [PASS] N×filler=N=10,f=5    pass=0.920  noEv=0.080 cap=0.880 | fav=1.000 worst=0.055 margin[mean/p05]=0.941/0.818 ordered=0.640
+  [    ] placement=blocked,f=5 pass=0.660  noEv=0.320 cap=1.000 | fav=1.000 worst=0.070 margin[mean/p05]=0.902/0.674 ordered=0.300
+  [    ] N×filler=N=10,f=1    pass=0.380  noEv=0.000 cap=0.640 | fav=1.000 worst=0.506 margin[mean/p05]=0.494/0.414 ordered=0.960
+  [    ]·DOM×WINDOW=dom=0.5,win=16 pass=0.040  noEv=0.000 cap=0.480 | fav=1.000 worst=0.710 margin[mean/p05]=0.290/0.208 ordered=0.980
+  [    ] N×filler=N=12,f=1    pass=0.020  noEv=0.000 cap=0.480 | fav=1.000 worst=0.693 margin[mean/p05]=0.307/0.196 ordered=0.900
+  [    ]·DOM×WINDOW=dom=0.75,win=12 pass=0.020  noEv=0.000 cap=0.480 | fav=1.000 worst=0.693 margin[mean/p05]=0.307/0.196 ordered=0.900
+  [    ]·DOM×WINDOW=dom=1,win=12 pass=0.020  noEv=0.000 cap=0.480 | fav=1.000 worst=0.693 margin[mean/p05]=0.307/0.196 ordered=0.900
+  [    ] N×filler=N=16,f=1    pass=0.000  noEv=0.000 cap=0.340 | fav=1.000 worst=0.721 margin[mean/p05]=0.279/0.221 ordered=0.980
+  [    ]·DOM×WINDOW=dom=0.5,win=8 pass=0.000  noEv=0.000 cap=0.480 | fav=1.000 worst=0.704 margin[mean/p05]=0.296/0.245 ordered=0.980
+  [    ] focal-lever=spoil=(3,2),f=1 pass=0.000  noEv=0.000 cap=0.460 | fav=1.000 worst=0.793 margin[mean/p05]=0.207/0.141 ordered=0.860
+
+=== C4 (divisibility, metric=circulation) ===
+    FEASIBLE — the teaching cell meets its pass-rate bar
+    teaching cell: N×filler=N=16,f=1
+    C0-filled bars (H6 — for closing-entry ratification):
+      circulation pass rate (runs demonstrating the lesson) = 0.750  [H6: down 20% from observed 0.960; failable]
+        basis: teaching cell N×filler=N=16,f=1: fraction of runs passing the derived margin+refusal bar
+      circulation visible-margin floor (favored − worst) = 0.050  [H6: down 20% from observed 0.113; NOT-FAILABLE (flag: no swept cell fails it)]
+        basis: teaching cell N×filler=N=16,f=1: 5th-pct favored−worst margin over defined runs
+      change-making refusal floor (indivisible − fine, per unit) = 3.000  [H6: down 20% from observed 4.894; NOT-FAILABLE (flag: no swept cell fails it)]
+        basis: teaching cell N×filler=N=16,f=1: 5th-pct indivisible−fine divisibility-refusal rate
+      tolerated favored NO_EVIDENCE rate (A(g) convention; §9.1) = 0.000  [H6: up 20% from observed 0.000; NOT-FAILABLE (flag: no swept cell fails it)]
+        basis: teaching cell N×filler=N=16,f=1: favored-good NO_EVIDENCE rate
+  [PASS] N×filler=N=16,f=1    pass=0.960  noEv=0.000 cap=0.980 | fav=0.967 worst=0.504 margin[mean/p05]=0.462/0.113 refusalGap=51.292
+  [PASS] N×filler=N=12,f=1    pass=0.820  noEv=0.000 cap=0.980 | fav=0.784 worst=0.433 margin[mean/p05]=0.350/0.000 refusalGap=59.706
+  [PASS]·DOM×WINDOW=dom=0.5,win=16 pass=0.820  noEv=0.000 cap=0.960 | fav=0.822 worst=0.459 margin[mean/p05]=0.364/0.000 refusalGap=58.088
+  [PASS]·DOM×WINDOW=dom=0.75,win=12 pass=0.820  noEv=0.000 cap=0.980 | fav=0.784 worst=0.433 margin[mean/p05]=0.350/0.000 refusalGap=59.706
+  [PASS]·DOM×WINDOW=dom=1,win=12 pass=0.820  noEv=0.000 cap=0.980 | fav=0.784 worst=0.433 margin[mean/p05]=0.350/0.000 refusalGap=59.706
+  [PASS] N×filler=N=16,f=5    pass=0.800  noEv=0.000 cap=0.860 | fav=1.221 worst=0.389 margin[mean/p05]=0.831/0.000 refusalGap=44.992
+  [PASS]·DOM×WINDOW=dom=0.5,win=8 pass=0.800  noEv=0.000 cap=0.960 | fav=0.849 worst=0.458 margin[mean/p05]=0.391/0.000 refusalGap=56.956
+  [PASS] N×filler=N=12,f=3    pass=0.780  noEv=0.000 cap=0.820 | fav=1.186 worst=0.485 margin[mean/p05]=0.701/0.000 refusalGap=46.902
+  [PASS] N×filler=N=16,f=3    pass=0.780  noEv=0.000 cap=0.840 | fav=1.031 worst=0.456 margin[mean/p05]=0.575/0.000 refusalGap=46.985
+  [    ] placement=blocked,f=1 pass=0.720  noEv=0.000 cap=0.880 | fav=1.014 worst=0.512 margin[mean/p05]=0.501/0.000 refusalGap=53.061
+  [    ] N×filler=N=12,f=5    pass=0.700  noEv=0.000 cap=0.880 | fav=0.903 worst=0.307 margin[mean/p05]=0.596/0.000 refusalGap=40.733
+  [    ] N×filler=N=10,f=1    pass=0.680  noEv=0.000 cap=0.860 | fav=0.947 worst=0.397 margin[mean/p05]=0.550/0.000 refusalGap=55.539
+  [    ] N×filler=N=10,f=3    pass=0.640  noEv=0.000 cap=0.920 | fav=0.791 worst=0.274 margin[mean/p05]=0.517/0.000 refusalGap=56.636
+  [    ] N×filler=N=10,f=5    pass=0.620  noEv=0.000 cap=0.920 | fav=0.913 worst=0.204 margin[mean/p05]=0.710/0.000 refusalGap=54.869
+  [    ] placement=blocked,f=5 pass=0.440  noEv=0.000 cap=1.000 | fav=0.472 worst=0.188 margin[mean/p05]=0.285/0.000 refusalGap=51.332
+
+Beats reaching their bar: C3, C4
+Beats NOT reaching their bar (escape candidates): C1

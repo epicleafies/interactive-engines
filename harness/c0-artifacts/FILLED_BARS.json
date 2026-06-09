@@ -1,0 +1,94 @@
+{
+  "register": "D-063",
+  "method": "H6 headroom (D-057(a)); closing entry ratifies (D-057(h))",
+  "beats": [
+    {
+      "id": "C1",
+      "metric": "acceptance",
+      "teachingCell": "N×filler=N=16,f=1",
+      "feasible": false,
+      "bars": [
+        {
+          "name": "round-top rate (favored tops the focal trio, margin >= 0.10)",
+          "value": 0.9,
+          "observedBase": 0.8,
+          "basis": "registered D-057(e)/D-058 (C1 keeps the focal-relative A(g) round bar; not C0-derived)",
+          "failableDirection": "down",
+          "nonTriviallyFailable": true
+        }
+      ]
+    },
+    {
+      "id": "C3",
+      "metric": "persistence",
+      "teachingCell": "N×filler=N=16,f=3",
+      "feasible": true,
+      "bars": [
+        {
+          "name": "persistence pass rate (runs demonstrating the lesson)",
+          "value": 0.8,
+          "observedBase": 1,
+          "basis": "teaching cell N×filler=N=16,f=3: fraction of runs passing the derived margin bar",
+          "failableDirection": "down",
+          "nonTriviallyFailable": true
+        },
+        {
+          "name": "persistence visible-margin floor (favored − worst)",
+          "value": 0.5,
+          "observedBase": 0.6352673796791444,
+          "basis": "teaching cell N×filler=N=16,f=3: 5th-pct favored−worst margin over defined runs",
+          "failableDirection": "down",
+          "nonTriviallyFailable": true
+        },
+        {
+          "name": "tolerated favored NO_EVIDENCE rate (A(g) convention; §9.1)",
+          "value": 0,
+          "observedBase": 0,
+          "basis": "teaching cell N×filler=N=16,f=3: favored-good NO_EVIDENCE rate",
+          "failableDirection": "up",
+          "nonTriviallyFailable": true
+        }
+      ]
+    },
+    {
+      "id": "C4",
+      "metric": "circulation",
+      "teachingCell": "N×filler=N=16,f=1",
+      "feasible": true,
+      "bars": [
+        {
+          "name": "circulation pass rate (runs demonstrating the lesson)",
+          "value": 0.75,
+          "observedBase": 0.96,
+          "basis": "teaching cell N×filler=N=16,f=1: fraction of runs passing the derived margin+refusal bar",
+          "failableDirection": "down",
+          "nonTriviallyFailable": true
+        },
+        {
+          "name": "circulation visible-margin floor (favored − worst)",
+          "value": 0.05,
+          "observedBase": 0.11333333333333334,
+          "basis": "teaching cell N×filler=N=16,f=1: 5th-pct favored−worst margin over defined runs",
+          "failableDirection": "down",
+          "nonTriviallyFailable": false
+        },
+        {
+          "name": "change-making refusal floor (indivisible − fine, per unit)",
+          "value": 3,
+          "observedBase": 4.893750000000001,
+          "basis": "teaching cell N×filler=N=16,f=1: 5th-pct indivisible−fine divisibility-refusal rate",
+          "failableDirection": "down",
+          "nonTriviallyFailable": false
+        },
+        {
+          "name": "tolerated favored NO_EVIDENCE rate (A(g) convention; §9.1)",
+          "value": 0,
+          "observedBase": 0,
+          "basis": "teaching cell N×filler=N=16,f=1: favored-good NO_EVIDENCE rate",
+          "failableDirection": "up",
+          "nonTriviallyFailable": false
+        }
+      ]
+    }
+  ]
+}
