@@ -82,3 +82,20 @@ bars C0-FILLED per H6 (D-057(a)); teaching cell cited; · = robustness cell. C4 
 
 Beats reaching their bar: C3, C4
 Beats NOT reaching their bar (escape candidates): C1
+=== C5 (portability, scaled regional/merge grading; D-072/D-073; 50-seed batches) ===
+    FEASIBLE — the teaching cell meets all three E-series bars
+    teaching cell: N=16 round-robin (RC=4)
+    merge-winner = robust born-dominance over GLOBAL A(g) (classifyEmergence/convergenceWinner); never the DOMINANCE event (D-072)
+    C0-filled bars (H6 — for closing-entry ratification; FAIL* marks the cited failability cell per bar):
+      [PRIMARY] E1 regional-moneys-form rate (≥2 distinct regional leaders before convergence) = 0.600  [H6: down 20% from observed 0.760; failable]
+        basis: teaching cell N=16 round-robin (D-073); fails at single-region ablation (REGION_COUNT 1) (rate 0.000 < 0.6)
+      [PRIMARY] E2 regions-merge rate (converged via an emerged winner, robust) = 0.650  [H6: down 20% from observed 0.840; failable]
+        basis: teaching cell N=16 round-robin (D-073); fails at regional-clustered placement (rate 0.000 < 0.65)
+      [PRIMARY] E3 portability-decides-merge rate (high-port good wins+emerges, directional) = 0.450  [H6: down 20% from observed 0.586; failable]
+        basis: teaching cell N=16 round-robin (D-073); fails at N=12 round-robin (rate 0.056 < 0.45)
+        E3 chance baseline (3-good): 0.333 — the E3 bar exceeds chance
+  [TEACH] N=16 round-robin (RC=4)                          E1=0.760 conv=0.880 E2=0.840 E3=0.586 (n=29) regDef=0.988
+  [FAIL*] N=12 round-robin (RC=4)                          E1=0.800 conv=0.640 E2=0.540 E3=0.056 (n=18) regDef=0.982
+  [FAIL*] N=16 regional-clustered (RC=4)                   E1=1.000 conv=0.000 E2=0.000 E3=0.000 (n=46) regDef=0.977
+  [FAIL*] N=16 round-robin (RC=1, single-region ablation)  E1=0.000 conv=0.880 E2=0.840 E3=  —   (n=0) regDef=0.000
+  [ ctx ] N=12 regional-clustered (RC=4)                   E1=1.000 conv=0.100 E2=0.020 E3=0.023 (n=43) regDef=0.982

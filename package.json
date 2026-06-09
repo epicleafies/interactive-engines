@@ -26,7 +26,7 @@
     "selftest": "node --import tsx harness/self-test.ts",
     "engine-selftest": "node --import tsx harness/engine-selftest.ts",
     "selftest:topology": "node --import tsx selftests/topology.ts",
-    "test": "node --import tsx harness/self-test.ts && node --import tsx harness/engine-selftest.ts && node --import tsx harness/run.ts && node --import tsx selftests/topology.ts",
+    "test": "node --import tsx harness/self-test.ts && node --import tsx harness/engine-selftest.ts && node --import tsx harness/run.ts && node --import tsx harness/c5-feasibility.ts && node --import tsx selftests/topology.ts",
     "verify:packaged": "npm run build && tsc -p tsconfig.packaging.json && node --import tsx packaging/built-pin-check.ts"
   },
   "devDependencies": {

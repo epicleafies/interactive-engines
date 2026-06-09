@@ -1,0 +1,113 @@
+{
+  "id": "C5",
+  "focal": "portability",
+  "teachingCell": "N=16 round-robin (RC=4)",
+  "bars": [
+    {
+      "name": "E1 regional-moneys-form rate (≥2 distinct regional leaders before convergence)",
+      "role": "primary",
+      "value": 0.6,
+      "observedBase": 0.76,
+      "basis": "teaching cell N=16 round-robin (D-073); fails at single-region ablation (REGION_COUNT 1) (rate 0.000 < 0.6)",
+      "failableDirection": "down",
+      "nonTriviallyFailable": true
+    },
+    {
+      "name": "E2 regions-merge rate (converged via an emerged winner, robust)",
+      "role": "primary",
+      "value": 0.65,
+      "observedBase": 0.84,
+      "basis": "teaching cell N=16 round-robin (D-073); fails at regional-clustered placement (rate 0.000 < 0.65)",
+      "failableDirection": "down",
+      "nonTriviallyFailable": true
+    },
+    {
+      "name": "E3 portability-decides-merge rate (high-port good wins+emerges, directional)",
+      "role": "primary",
+      "value": 0.45,
+      "observedBase": 0.5862068965517241,
+      "basis": "teaching cell N=16 round-robin (D-073); fails at N=12 round-robin (rate 0.056 < 0.45)",
+      "failableDirection": "down",
+      "nonTriviallyFailable": true
+    }
+  ],
+  "e3ChanceBaseline": 0.3333333333333333,
+  "cells": [
+    {
+      "label": "N=16 round-robin (RC=4)",
+      "n": 16,
+      "placement": "round-robin",
+      "regionCount": 4,
+      "role": "teaching",
+      "outcome": {
+        "e1FormRate": 0.76,
+        "e2MergeRate": 0.84,
+        "convergedRate": 0.88,
+        "e3DecidesRate": 0.5862068965517241,
+        "e3ConditioningRuns": 29,
+        "regionalDefinedRate": 0.9876250000000002
+      }
+    },
+    {
+      "label": "N=12 round-robin (RC=4)",
+      "n": 12,
+      "placement": "round-robin",
+      "regionCount": 4,
+      "role": "E3-fail",
+      "outcome": {
+        "e1FormRate": 0.8,
+        "e2MergeRate": 0.54,
+        "convergedRate": 0.64,
+        "e3DecidesRate": 0.05555555555555555,
+        "e3ConditioningRuns": 18,
+        "regionalDefinedRate": 0.9817083333333333
+      }
+    },
+    {
+      "label": "N=16 regional-clustered (RC=4)",
+      "n": 16,
+      "placement": "regional-clustered",
+      "regionCount": 4,
+      "role": "E2-fail",
+      "outcome": {
+        "e1FormRate": 1,
+        "e2MergeRate": 0,
+        "convergedRate": 0,
+        "e3DecidesRate": 0,
+        "e3ConditioningRuns": 46,
+        "regionalDefinedRate": 0.9766666666666666
+      }
+    },
+    {
+      "label": "N=16 round-robin (RC=1, single-region ablation)",
+      "n": 16,
+      "placement": "round-robin",
+      "regionCount": 1,
+      "role": "E1-fail",
+      "outcome": {
+        "e1FormRate": 0,
+        "e2MergeRate": 0.84,
+        "convergedRate": 0.88,
+        "e3DecidesRate": null,
+        "e3ConditioningRuns": 0,
+        "regionalDefinedRate": 0
+      }
+    },
+    {
+      "label": "N=12 regional-clustered (RC=4)",
+      "n": 12,
+      "placement": "regional-clustered",
+      "regionCount": 4,
+      "role": "context",
+      "outcome": {
+        "e1FormRate": 1,
+        "e2MergeRate": 0.02,
+        "convergedRate": 0.1,
+        "e3DecidesRate": 0.023255813953488372,
+        "e3ConditioningRuns": 43,
+        "regionalDefinedRate": 0.9822499999999998
+      }
+    }
+  ],
+  "feasible": true
+}

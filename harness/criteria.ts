@@ -57,6 +57,19 @@ import { deriveSeeds, DEFAULT_BATCH_SIZE } from "./batch.ts";
 import { passRate } from "./stats.ts";
 import { refereeVerdict } from "./referee.ts";
 import { verifyPin, PINNED_DIGEST } from "./project-seed-pin.ts";
+import {
+  E1_BAR,
+  E2_BAR,
+  E3_BAR,
+  E3_CHANCE_BASELINE,
+  C5_TEACHING_N,
+  C5_FAIL_E3_N,
+  c5TeachingConfig,
+  c5FailE1Config,
+  c5FailE2Config,
+  c5FailE3Config,
+  runScaledCell,
+} from "./c5-calibration.ts";
 
 /**
  * A functional seed for the engine-backed structural criteria — an arbitrary
@@ -993,16 +1006,98 @@ const D: Assertion[] = [
 
 // --- E. Scaling and regional behavior -----------------------------------
 
+// The E-series grades the C5 scaled regional/merge behavior on the calibrated bars
+// (D-073), filled by the C5 calibration (c5-calibration.ts) at the teaching cell
+// (N=16 round-robin, REGION_COUNT 4) per the H6 headroom rule (D-057(a)). Every
+// merge / emergence determination runs through the ROBUST born-dominance measure
+// over the GLOBAL A(g) telemetry (D-069/D-072) — never the engine's §9.2
+// DOMINANT(g)/DOMINANCE event. Each bar is graded two-sidedly: the teaching cell
+// must still CLEAR it (a regression guard against the ratified C0-filled number),
+// and a cited regime where the mechanic is DISABLED must still FAIL it (the C4
+// lesson — a bar nothing can fail proves nothing). Distributional, 50-seed
+// batches (H2).
 const E: Assertion[] = [
-  campaignCriterion("E1", "E1 — Regional moneys form",
-    "At scale parameters with local information, at least two distinct regional leaders appear at some point " +
-      "before global convergence in at least the registered fraction of runs."),
-  campaignCriterion("E2", "E2 — Regions merge",
-    "After regional leaders form, the market still reaches global convergence (scaled thresholds) in at " +
-      "least the registered fraction of runs."),
-  campaignCriterion("E3", "E3 — Portability decides the merge",
-    "In scaled runs where a low-portability good leads one region and a high-portability good leads another, " +
-      "the high-portability good wins the merge in at least the registered fraction of cases."),
+  {
+    id: "E1",
+    criterion: "E1 — Regional moneys form",
+    claim:
+      "At scale parameters with local information, at least two distinct regional leaders appear at some point " +
+      "before global convergence in at least the registered fraction of runs — graded on the C5 teaching cell " +
+      `(N=${C5_TEACHING_N} round-robin, REGION_COUNT 4; D-073) against the C0-filled bar ${E1_BAR} (H6 headroom, ` +
+      "D-057(a)). Regional leadership is the weak per-region leader (greatest per-region A(g), no rise clause, " +
+      "D-072 unaffected), read from telemetry. FAILABLE by construction: in the single-region ablation " +
+      "(REGION_COUNT 1, otherwise identical geometry) the engine tracks no regional leaders at all, so the rate " +
+      "collapses to 0 — without that collapse the bar would grade nothing.",
+    evaluate: (): AssertionResult => {
+      const teach = runScaledCell(c5TeachingConfig()).e1FormRate;
+      const ablation = runScaledCell(c5FailE1Config()).e1FormRate;
+      if (ablation >= E1_BAR) {
+        return fail(`single-region ablation E1 rate ${ablation.toFixed(3)} did not fall below the bar ${E1_BAR}: regional formation is not what the bar grades (not failable)`);
+      }
+      if (teach < E1_BAR) {
+        return fail(`teaching-cell E1 regional-formation rate ${teach.toFixed(3)} fell below the C0-filled bar ${E1_BAR}`);
+      }
+      return pass(
+        `≥2 regional moneys form before convergence in ${teach.toFixed(3)} of teaching-cell runs (bar ${E1_BAR}); the single-region ablation collapses to ${ablation.toFixed(3)} (failable)`,
+        { rate: teach },
+      );
+    },
+  },
+  {
+    id: "E2",
+    criterion: "E2 — Regions merge",
+    claim:
+      "After regional leaders form, the market still reaches global convergence in at least the registered " +
+      `fraction of runs — graded on the C5 teaching cell against the C0-filled bar ${E2_BAR} (H6, D-057(a)). A ` +
+      "merge counts only when the convergence winner EMERGED (robust born-dominance over global A(g), D-072) " +
+      "rather than being born dominant — a born-dominant 'convergence' is fiat, not a merge — and the winner is " +
+      "recomputed harness-side from the A(g) telemetry, never read from the DOMINANCE event. FAILABLE: under " +
+      "regional-clustered placement the reach geometry fragments into regional moneys that never merge (the " +
+      "D-073 finding), so the rate collapses below the bar.",
+    evaluate: (): AssertionResult => {
+      const teach = runScaledCell(c5TeachingConfig()).e2MergeRate;
+      const clustered = runScaledCell(c5FailE2Config()).e2MergeRate;
+      if (clustered >= E2_BAR) {
+        return fail(`regional-clustered E2 merge rate ${clustered.toFixed(3)} did not fall below the bar ${E2_BAR}: the merge regime is not what the bar grades (not failable)`);
+      }
+      if (teach < E2_BAR) {
+        return fail(`teaching-cell E2 merge rate ${teach.toFixed(3)} fell below the C0-filled bar ${E2_BAR}`);
+      }
+      return pass(
+        `regions merge via an emerged winner (robust, no DOMINANCE read) in ${teach.toFixed(3)} of teaching-cell runs (bar ${E2_BAR}); clustered placement fragments to ${clustered.toFixed(3)} (failable)`,
+        { rate: teach },
+      );
+    },
+  },
+  {
+    id: "E3",
+    criterion: "E3 — Portability decides the merge",
+    claim:
+      "In scaled runs where a low-portability good leads one region and a high-portability good leads another, " +
+      "the high-portability good wins the merge in at least the registered fraction of cases — directional, over " +
+      `the conditioning set where the lead-config holds, graded against the C0-filled bar ${E3_BAR} (H6, ` +
+      `D-057(a)), which sits above the ~${E3_CHANCE_BASELINE.toFixed(2)} three-good chance. The winner is the ` +
+      "robust convergence winner over global A(g) that also EMERGED (D-072), never the DOMINANCE event. FAILABLE: " +
+      `at N=${C5_FAIL_E3_N} round-robin the merge is too weak for portability to decide it, so the directional ` +
+      "rate collapses below the bar.",
+    evaluate: (): AssertionResult => {
+      const teach = runScaledCell(c5TeachingConfig()).e3DecidesRate;
+      const weak = runScaledCell(c5FailE3Config()).e3DecidesRate;
+      if (!(E3_BAR > E3_CHANCE_BASELINE)) {
+        return fail(`the E3 bar ${E3_BAR} does not exceed the ${E3_CHANCE_BASELINE.toFixed(3)} three-good chance baseline — it grades no portability signal`);
+      }
+      if (weak >= E3_BAR) {
+        return fail(`N=${C5_FAIL_E3_N} round-robin E3 rate ${weak.toFixed(3)} did not fall below the bar ${E3_BAR}: portability deciding the merge is not what the bar grades (not failable)`);
+      }
+      if (teach < E3_BAR) {
+        return fail(`teaching-cell E3 portability-decides rate ${teach.toFixed(3)} fell below the C0-filled bar ${E3_BAR}`);
+      }
+      return pass(
+        `the high-portability good wins+emerges the merge in ${teach.toFixed(3)} of conditioning runs (bar ${E3_BAR} > ${E3_CHANCE_BASELINE.toFixed(2)} chance); collapses to ${weak.toFixed(3)} at N=${C5_FAIL_E3_N} (failable)`,
+        { rate: teach },
+      );
+    },
+  },
 ];
 
 // --- F. Opening beats ----------------------------------------------------

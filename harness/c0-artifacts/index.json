@@ -1,5 +1,5 @@
 {
-  "register": "D-063",
+  "register": "D-063 (village); D-073 (C5 scaled)",
   "beats": [
     {
       "id": "C1",
@@ -24,6 +24,14 @@
       "feasible": true,
       "teachingCell": "N×filler=N=16,f=1",
       "cells": 16
+    },
+    {
+      "id": "C5",
+      "focal": "portability",
+      "metric": "scaled-regional/merge",
+      "feasible": true,
+      "teachingCell": "N=16 round-robin (RC=4)",
+      "cells": 5
     }
   ]
 }

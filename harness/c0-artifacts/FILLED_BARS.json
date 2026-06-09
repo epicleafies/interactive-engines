@@ -1,5 +1,5 @@
 {
-  "register": "D-063",
+  "register": "D-063 (village C1/C3/C4); D-073 (C5 scaled E1/E2/E3)",
   "method": "H6 headroom (D-057(a)); closing entry ratifies (D-057(h))",
   "beats": [
     {
@@ -95,6 +95,41 @@
           "basis": "teaching cell N×filler=N=16,f=1: favored-good NO_EVIDENCE rate",
           "failableDirection": "up",
           "nonTriviallyFailable": false
+        }
+      ]
+    },
+    {
+      "id": "C5",
+      "metric": "scaled-regional/merge",
+      "teachingCell": "N=16 round-robin (RC=4)",
+      "feasible": true,
+      "bars": [
+        {
+          "name": "E1 regional-moneys-form rate (≥2 distinct regional leaders before convergence)",
+          "role": "primary",
+          "value": 0.6,
+          "observedBase": 0.76,
+          "basis": "teaching cell N=16 round-robin (D-073); fails at single-region ablation (REGION_COUNT 1) (rate 0.000 < 0.6)",
+          "failableDirection": "down",
+          "nonTriviallyFailable": true
+        },
+        {
+          "name": "E2 regions-merge rate (converged via an emerged winner, robust)",
+          "role": "primary",
+          "value": 0.65,
+          "observedBase": 0.84,
+          "basis": "teaching cell N=16 round-robin (D-073); fails at regional-clustered placement (rate 0.000 < 0.65)",
+          "failableDirection": "down",
+          "nonTriviallyFailable": true
+        },
+        {
+          "name": "E3 portability-decides-merge rate (high-port good wins+emerges, directional)",
+          "role": "primary",
+          "value": 0.45,
+          "observedBase": 0.5862068965517241,
+          "basis": "teaching cell N=16 round-robin (D-073); fails at N=12 round-robin (rate 0.056 < 0.45)",
+          "failableDirection": "down",
+          "nonTriviallyFailable": true
         }
       ]
     }

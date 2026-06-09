@@ -371,11 +371,11 @@ function corroboratingPassRun(m: RunMetric, bar: DimensionBar): boolean | null {
 
 // --- H6 bar derivation (D-057(a)) -------------------------------------------
 
-const H6_HEADROOM = 0.2; // D-057(a): a post-observation bound sits >= 20% (relative) beyond the nearest observed value, in the failable direction.
+export const H6_HEADROOM = 0.2; // D-057(a): a post-observation bound sits >= 20% (relative) beyond the nearest observed value, in the failable direction.
 const floorTo = (x: number, step: number): number => Math.floor(x / step + 1e-9) * step;
 const ceilTo = (x: number, step: number): number => Math.ceil(x / step - 1e-9) * step;
 /** Floor bar (higher value passes): sit 20% relative BELOW the observed base (failable direction = down), rounded down to `step`. */
-const h6FloorBar = (observed: number, step: number): number => Math.max(0, floorTo(observed * (1 - H6_HEADROOM), step));
+export const h6FloorBar = (observed: number, step: number): number => Math.max(0, floorTo(observed * (1 - H6_HEADROOM), step));
 /** Ceiling bar (lower value passes; e.g. tolerated NO_EVIDENCE rate): sit 20% relative ABOVE the observed base, rounded up to `step`. */
 const h6CeilBar = (observed: number, step: number): number => ceilTo(observed * (1 + H6_HEADROOM), step);
 
