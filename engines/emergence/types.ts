@@ -321,6 +321,55 @@ export interface RoundTelemetry {
   readonly eventRecordComposition: Readonly<Record<string, number>>;
 }
 
+// --- Resolved setup topology (D-064) -------------------------------------
+
+/**
+ * The engine's own resolution of the spatial setup the UI must render but must
+ * never recompute (D-053): how far each good reaches, and which region each
+ * trader sits in. Both fields are pure resolutions of inputs already fixed at
+ * setup — the config's level->parameter mapping and the fixed ring positions —
+ * so they carry NO run entropy and are bit-stable across replays.
+ *
+ * They are *surfaced* from the engine's own resolvers (`reachOf`, `regionOf`),
+ * not recomputed: those resolvers are engine-internal (not on the public surface,
+ * so a consumer cannot call them), and D-053 forbids the UI re-deriving ring
+ * distance or arc boundaries. Emitting the resolved values is what lets a
+ * consumer bind geometry instead of reconstructing it.
+ *
+ * Additive and deliberately OUTSIDE the pinned serialization (serializeRun):
+ * because it is a deterministic function of inputs already pinned (config +
+ * positions) it tells the determinism/replay checks nothing new, and it must not
+ * move the PROJECT_SEED digest (D-064 determinism condition).
+ */
+export interface InitialTopology {
+  /**
+   * Resolved reach radius per good, indexed by `GoodType.id` (so `reachByGood[g]`
+   * is good `g`'s reach in ring positions). This is `reachOf` applied — the good's
+   * portability/bulk level mapped through `LevelMapping.reachRadius` — NOT the raw
+   * level. A consumer binds this distance directly and must not re-resolve the
+   * bulk->reach mapping itself (D-053).
+   */
+  readonly reachByGood: readonly number[];
+  /**
+   * Region membership per trader, indexed by ring position (which equals the
+   * `finalAgents` index: positions are fixed for the run, so the agent at index
+   * `i` sits at ring position `i`). Each entry is `regionOf(position, N,
+   * regionCount)` — the engine's own equal-arc resolution. When regions partition
+   * the ring (scaled mode; `regionsPartition` true) it is the trader's arc index
+   * in `[0, regionCount)`; otherwise the ring is one region and every entry is 0,
+   * an explicit single-region value rather than a UI-side guess about whether
+   * regions exist.
+   */
+  readonly regionByTrader: readonly number[];
+  /**
+   * Whether the ring is partitioned into multiple regions (scaled mode with
+   * REGION_COUNT > 1). False means a single region: `regionByTrader` is all 0 and
+   * a consumer draws no district boundaries. Makes the single-region case explicit
+   * rather than inferred from the values.
+   */
+  readonly regionsPartition: boolean;
+}
+
 // --- Run output ----------------------------------------------------------
 
 import type { RunRecord } from "../../harness/replay.ts";
@@ -342,6 +391,14 @@ export interface RunResult {
   readonly finalAgents: readonly Agent[];
   /** Reached the round cap without any dominance verdict (a first-class outcome). */
   readonly reachedCap: boolean;
+  /**
+   * Resolved setup topology (D-064): reach-per-good and region-per-trader, the
+   * engine's own resolution of the geometry a consumer renders from (D-053).
+   * Additive and scoped OUT of the pinned serialization — a pure function of the
+   * already-pinned config and positions, carrying no new entropy, so it does not
+   * move the PROJECT_SEED digest.
+   */
+  readonly initialTopology: InitialTopology;
 }
 
 /** The engine's single entry point: a pure function of configuration and seed. */

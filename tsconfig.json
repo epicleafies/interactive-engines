@@ -23,5 +23,5 @@
 
     "types": ["node"]
   },
-  "include": ["harness/**/*.ts", "engines/**/*.ts"]
+  "include": ["harness/**/*.ts", "engines/**/*.ts", "selftests/**/*.ts"]
 }

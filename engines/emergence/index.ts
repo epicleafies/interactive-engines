@@ -14,10 +14,12 @@
  * (D-028), and the no-runner-up detector verdict (D-029).
  */
 
-import type { Agent, Instance, RunFn } from "./types.ts";
+import type { Agent, Config, InitialTopology, Instance, RunFn } from "./types.ts";
 import { validateConfig, runSetup } from "./setup.ts";
 import { createState, type AgentState, type InstanceState } from "./state.ts";
 import { runRound } from "./round.ts";
+import { reachOf } from "./lookup.ts";
+import { regionOf } from "./ring.ts";
 import { makeRunRecord } from "../../harness/replay.ts";
 
 function freezeInstance(i: InstanceState | null): Instance | null {
@@ -27,6 +29,25 @@ function freezeInstance(i: InstanceState | null): Instance | null {
 
 function freezeAgent(a: AgentState): Agent {
   return { position: a.position, homeGood: a.homeGood, held: freezeInstance(a.held), want: a.want };
+}
+
+/**
+ * Resolve the setup topology a consumer renders from (D-064): each good's reach
+ * and each trader's region, computed through the engine's OWN resolvers
+ * (`reachOf`, `regionOf`) so the resolution is surfaced, not duplicated (D-053).
+ * `regionCount` is the engine's resolved region count (1 outside scaled mode), so
+ * the single-region case falls out of `regionOf` with no special-casing: with
+ * count 1 every position maps to arc 0. Pure in {config, positions} — no draws,
+ * no run state — which is why the block carries no entropy and stays out of the
+ * pinned serialization.
+ */
+function resolveInitialTopology(config: Config, regionCount: number): InitialTopology {
+  const reachByGood = config.goods.map((g) => reachOf(config, g.id));
+  const regionByTrader: number[] = [];
+  for (let pos = 0; pos < config.ringSize; pos++) {
+    regionByTrader.push(regionOf(pos, config.ringSize, regionCount));
+  }
+  return { reachByGood, regionByTrader, regionsPartition: regionCount > 1 };
 }
 
 /**
@@ -47,6 +68,7 @@ export const run: RunFn = (config, seed) => {
     telemetry: state.telemetry,
     finalAgents: state.agents.map(freezeAgent),
     reachedCap: state.reachedCap,
+    initialTopology: resolveInitialTopology(config, state.regionCount),
   };
 };
 
