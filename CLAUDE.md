@@ -138,3 +138,6 @@ improvise a rule.
 - No human-subject session data here, ever.
 - Commit messages: imperative mood, stating what and why. Tag document and
   engine versions when they ship.
+
+## Commits
+- Commit messages must contain no AI/Claude/Anthropic co-author trailer or attribution of any kind.
