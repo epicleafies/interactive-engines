@@ -6,6 +6,7 @@
   "bars": [],
   "passRateBar": {
     "name": "round-top rate (favored tops the focal trio, margin >= 0.10)",
+    "role": "primary",
     "value": 0.9,
     "observedBase": 0.8,
     "basis": "registered D-057(e)/D-058 (C1 keeps the focal-relative A(g) round bar; not C0-derived)",
@@ -31,7 +32,8 @@
       "orderedRate": 0.76,
       "refusalGapMean": null,
       "passRate": 0.76,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -51,7 +53,8 @@
       "orderedRate": 0.1,
       "refusalGapMean": null,
       "passRate": 0.08,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -71,7 +74,8 @@
       "orderedRate": 0,
       "refusalGapMean": null,
       "passRate": 0,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -91,7 +95,8 @@
       "orderedRate": 0.74,
       "refusalGapMean": null,
       "passRate": 0.7,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -111,7 +116,8 @@
       "orderedRate": 0.12,
       "refusalGapMean": null,
       "passRate": 0.12,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -131,7 +137,8 @@
       "orderedRate": 0.02,
       "refusalGapMean": null,
       "passRate": 0.02,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -151,7 +158,8 @@
       "orderedRate": 0.84,
       "refusalGapMean": null,
       "passRate": 0.8,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -171,7 +179,8 @@
       "orderedRate": 0.12,
       "refusalGapMean": null,
       "passRate": 0.12,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -191,7 +200,8 @@
       "orderedRate": 0.1,
       "refusalGapMean": null,
       "passRate": 0.1,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "placement",
@@ -211,7 +221,8 @@
       "orderedRate": 0.02,
       "refusalGapMean": null,
       "passRate": 0,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "placement",
@@ -231,7 +242,8 @@
       "orderedRate": 0.02,
       "refusalGapMean": null,
       "passRate": 0.02,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "DOM×WINDOW",
@@ -251,7 +263,8 @@
       "orderedRate": 0.78,
       "refusalGapMean": null,
       "passRate": 0.72,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "DOM×WINDOW",
@@ -271,7 +284,8 @@
       "orderedRate": 0.76,
       "refusalGapMean": null,
       "passRate": 0.74,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "DOM×WINDOW",
@@ -291,7 +305,8 @@
       "orderedRate": 0.74,
       "refusalGapMean": null,
       "passRate": 0.7,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "DOM×WINDOW",
@@ -311,7 +326,8 @@
       "orderedRate": 0.74,
       "refusalGapMean": null,
       "passRate": 0.7,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "focal-lever",
@@ -331,7 +347,8 @@
       "orderedRate": 0.06,
       "refusalGapMean": null,
       "passRate": 0,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "focal-lever",
@@ -351,7 +368,8 @@
       "orderedRate": 0.82,
       "refusalGapMean": null,
       "passRate": 0.78,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     }
   ],
   "feasible": false

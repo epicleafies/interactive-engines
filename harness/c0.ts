@@ -331,25 +331,42 @@ function runMetric(beat: VillageBeat, r: RunResult): RunMetric {
   return { favored, mid, worst, margin, ordered, refusalGap, favoredNoEvidence: favored == null, reachedCap: r.reachedCap };
 }
 
-/** The bar a per-dimension beat is graded against (numbers C0-filled per H6). */
+/**
+ * The bar a per-dimension beat is graded against (numbers C0-filled per H6). The
+ * `primary` statistic is the FAILABLE gate; the other is corroborating, computed
+ * and reported but not deciding the pass.
+ *   - C3 (durability): primary = "margin" (the persistence gap). No corroborator.
+ *   - C4 (divisibility): primary = "refusal" (the change-making refusal differential,
+ *     D-065 refines D-060) — circulation separates only at noise level, the refusal
+ *     differential is the direct quantity-saleability measure. The circulation
+ *     `marginFloor` is retained as the corroborating check, not the gate.
+ */
 interface DimensionBar {
-  /** Favored exceeds worst by >= this on the dimension statistic. */
+  readonly primary: "margin" | "refusal";
+  /** Favored exceeds worst by >= this on the dimension statistic (C3 gate; C4 corroborating). */
   readonly marginFloor: number;
-  /** C4 only: indivisible's change-making refusal rate exceeds the fine good's by >= this. */
+  /** C4 only: indivisible's change-making refusal rate exceeds the fine good's by >= this (C4 gate). */
   readonly refusalThreshold: number | null;
 }
 
 /**
- * Single-run pass on the per-dimension bar. NO_EVIDENCE is handled per A(g)'s own
- * convention (§9.1): a run whose favored focal good is NO_EVIDENCE does not
- * demonstrate the lesson — it counts as a FAIL in the pass rate (denominator is
+ * Single-run pass on the per-dimension PRIMARY bar. NO_EVIDENCE is handled per
+ * A(g)'s own convention (§9.1): a run whose favored focal good is NO_EVIDENCE does
+ * not demonstrate the lesson — it counts as a FAIL in the pass rate (denominator is
  * every run), exactly as a NO_EVIDENCE favored good never "finishes top" under the
  * A(g) round bar. The tolerated NO_EVIDENCE rate is a separate ceiling.
  */
 function dimensionPassRun(m: RunMetric, bar: DimensionBar): boolean {
-  if (m.margin === null || m.margin < bar.marginFloor) return false;
-  if (bar.refusalThreshold !== null && (m.refusalGap === null || m.refusalGap < bar.refusalThreshold)) return false;
-  return true;
+  if (bar.primary === "refusal") {
+    return m.refusalGap !== null && bar.refusalThreshold !== null && m.refusalGap >= bar.refusalThreshold;
+  }
+  return m.margin !== null && m.margin >= bar.marginFloor;
+}
+
+/** The corroborating (non-gate) check for C4: the circulation margin. Null when there is no corroborator. */
+function corroboratingPassRun(m: RunMetric, bar: DimensionBar): boolean | null {
+  if (bar.primary !== "refusal") return null;
+  return m.margin !== null && m.margin >= bar.marginFloor;
 }
 
 // --- H6 bar derivation (D-057(a)) -------------------------------------------
@@ -365,6 +382,8 @@ const h6CeilBar = (observed: number, step: number): number => ceilTo(observed * 
 /** A bar number set at C0 per the registered H6 headroom rule, with its full derivation. */
 export interface DerivedBar {
   readonly name: string;
+  /** "primary" = the failable gate; "corroborating" = reported, not deciding; "ceiling" = a tolerated-rate cap. */
+  readonly role: "primary" | "corroborating" | "ceiling";
   readonly value: number;
   /** The observed value the headroom was applied to (from the teaching cell). */
   readonly observedBase: number;
@@ -416,9 +435,11 @@ export interface C0Cell {
   readonly orderedRate: number;
   /** C4 only: mean indivisible-minus-fine change-making refusal rate. */
   readonly refusalGapMean: number;
-  /** Graded against the derived bar: fraction of ALL runs passing (NO_EVIDENCE = fail). */
+  /** Graded against the PRIMARY bar: fraction of ALL runs passing (NO_EVIDENCE = fail). */
   readonly passRate: number;
   readonly meetsBar: boolean;
+  /** C4 only: fraction passing the corroborating circulation check (NaN when there is no corroborator). */
+  readonly corroboratingPassRate: number;
 }
 
 export interface C0BeatReport {
@@ -488,6 +509,13 @@ function cellsFor(beat: VillageBeat): CellSpec[] {
   } else if (beat.id === "C3") {
     // fast spoil (2,2) -> (3,2) (D-057(b) (S1,S2)-fast grid).
     focalDial("spoil=(3,2)", { ...M, durabilitySchedule: [{ s1: 3, s2: 2, neverSpoils: false }, M.durabilitySchedule[1]!, M.durabilitySchedule[2]!] });
+  } else if (beat.id === "C4") {
+    // A2:divisibility ablation — the failability demonstration for the refusal-primary bar
+    // (D-065). With the size table disabled, no divisibility refusals fire, so the
+    // change-making refusal differential collapses to 0 and the primary bar FAILS: the bar
+    // grades the divisibility MECHANIC, not a fixed parameter regime. Robustness cell, not teaching.
+    const c4base = buildVillage(beat, 16, 1, M, K, "round-robin");
+    add("A2-ablation", "divisibility-off", 16, 1, "round-robin", false, { ...c4base, ablation: { kind: "A2", attribute: "divisibility" } });
   }
   return specs;
 }
@@ -503,7 +531,7 @@ function runCell(beat: VillageBeat, spec: CellSpec): CellRun {
 }
 
 /** Distributional summary of a cell, independent of any bar. */
-function summarizeCell(metric: BeatMetric, run: CellRun): Omit<C0Cell, "passRate" | "meetsBar"> {
+function summarizeCell(metric: BeatMetric, run: CellRun): Omit<C0Cell, "passRate" | "meetsBar" | "corroboratingPassRate"> {
   const { spec, metrics } = run;
   const margins = metrics.map((m) => m.margin).filter((x): x is number => x != null);
   const mSummary = margins.length > 0 ? summarize(margins) : null;
@@ -554,7 +582,7 @@ function runAcceptanceBeat(beat: VillageBeat): C0BeatReport {
       metric: "acceptance", teaching: spec.teaching, capOutRate: capOut, noEvidenceRate: noEv,
       favoredStatMean: favMean, worstStatMean: NaN, marginMean: NaN, marginP05: NaN, marginP50: NaN,
       orderedRate: passRate(results.map(favoredTopsTrioRun)).rate, refusalGapMean: NaN,
-      passRate: rate, meetsBar: rate >= ROUND_TOP_RATE,
+      passRate: rate, meetsBar: rate >= ROUND_TOP_RATE, corroboratingPassRate: NaN,
     });
     if (spec.teaching && rate > teachingPass) { teachingPass = rate; teachingLabel = `${spec.axis}=${spec.value}`; }
   }
@@ -563,6 +591,7 @@ function runAcceptanceBeat(beat: VillageBeat): C0BeatReport {
     bars: [],
     passRateBar: {
       name: "round-top rate (favored tops the focal trio, margin >= 0.10)",
+      role: "primary",
       value: ROUND_TOP_RATE, observedBase: teachingPass,
       basis: "registered D-057(e)/D-058 (C1 keeps the focal-relative A(g) round bar; not C0-derived)",
       failableDirection: "down",
@@ -595,57 +624,94 @@ function runDimensionBeat(beat: VillageBeat): C0BeatReport {
   const tSummary = summaries.get(teaching)!;
   const tLabel = `${teaching.spec.axis}=${teaching.spec.value}`;
 
-  // Visible-margin floor: 20% relative below the teaching cell's robust (p05) achieved
-  // margin (D-057(a)), rounded to 0.05 — met in ~95% of its runs with headroom, failable
-  // for a thinner config. (For the [0,1] persistence statistic this sits well above the
-  // A(g) 0.10 legibility precedent, D-057(e).)
+  // The PRIMARY (failable) gate: persistence margin for C3, the change-making refusal
+  // differential for C4 (D-065 refines D-060 — circulation separates only at noise level,
+  // so it is corroborating, not the gate).
+  const primary: "margin" | "refusal" = beat.metric === "circulation" ? "refusal" : "margin";
+
+  // Margin floor: 20% relative below the teaching cell's robust (p05) achieved margin
+  // (D-057(a)), rounded to 0.05. For C3 this is the primary persistence gate; for C4 it is
+  // the corroborating circulation check (a noisy downstream consequence of the refusal gate).
   const marginFloor = h6FloorBar(tSummary.marginP05, 0.05);
-  const bars: DerivedBar[] = [{
+  const marginFailable = runs.some((r) => { const s = summaries.get(r)!; return !Number.isNaN(s.marginP50) && s.marginP50 < marginFloor; });
+  const marginBar: DerivedBar = {
     name: `${beat.metric} visible-margin floor (favored − worst)`,
+    role: primary === "margin" ? "primary" : "corroborating",
     value: marginFloor, observedBase: tSummary.marginP05,
     basis: `teaching cell ${tLabel}: 5th-pct favored−worst margin over defined runs`,
-    failableDirection: "down",
-    nonTriviallyFailable: runs.some((r) => { const s = summaries.get(r)!; return !Number.isNaN(s.marginP50) && s.marginP50 < marginFloor; }),
-  }];
+    failableDirection: "down", nonTriviallyFailable: marginFailable,
+  };
 
-  // C4 refusal-rate legibility threshold: 20% below the teaching cell's robust (p05)
-  // indivisible-minus-fine change-making refusal gap (D-057(a)), rounded to 1.0/unit.
+  // C4 change-making refusal floor (the PRIMARY gate, D-065): 20% below the teaching cell's
+  // robust (p05) indivisible-minus-fine divisibility-refusal gap (D-057(a)), rounded to
+  // 1.0/unit. Failable in the H6 sense via the A2:divisibility ablation cell (size table off
+  // -> no divisibility refusals -> the differential collapses to 0 -> the bar fails), proving
+  // the bar grades the mechanic, not a fixed parameter regime.
   let refusalThreshold: number | null = null;
+  let refusalBar: DerivedBar | null = null;
   if (beat.metric === "circulation") {
     const gaps = teaching.metrics.map((m) => m.refusalGap).filter((x): x is number => x != null);
     const gapP05 = gaps.length > 0 ? summarize(gaps).p05 : 0;
     refusalThreshold = h6FloorBar(gapP05, 1.0);
-    bars.push({
+    refusalBar = {
       name: "change-making refusal floor (indivisible − fine, per unit)",
+      role: "primary",
       value: refusalThreshold, observedBase: gapP05,
-      basis: `teaching cell ${tLabel}: 5th-pct indivisible−fine divisibility-refusal rate`,
+      basis: `teaching cell ${tLabel}: 5th-pct indivisible−fine divisibility-refusal rate; failable via A2:divisibility (collapses to 0)`,
       failableDirection: "down",
       nonTriviallyFailable: runs.some((r) => meanDefined(r.metrics.map((m) => m.refusalGap)) < refusalThreshold!),
-    });
+    };
   }
 
   // NO_EVIDENCE rate ceiling: 20% above the teaching cell's observed favored-NO_EVIDENCE
   // rate (D-057(a)), rounded to 0.02. Reported with the rule (A(g)'s convention).
-  const noEvidenceBar = h6CeilBar(tSummary.noEvidenceRate, 0.02);
-  bars.push({
+  const noEvidenceBar: DerivedBar = {
     name: "tolerated favored NO_EVIDENCE rate (A(g) convention; §9.1)",
-    value: noEvidenceBar, observedBase: tSummary.noEvidenceRate,
+    role: "ceiling",
+    value: h6CeilBar(tSummary.noEvidenceRate, 0.02), observedBase: tSummary.noEvidenceRate,
     basis: `teaching cell ${tLabel}: favored-good NO_EVIDENCE rate`,
     failableDirection: "up",
-    nonTriviallyFailable: runs.some((r) => summaries.get(r)!.noEvidenceRate > noEvidenceBar),
-  });
+    nonTriviallyFailable: runs.some((r) => summaries.get(r)!.noEvidenceRate > h6CeilBar(tSummary.noEvidenceRate, 0.02)),
+  };
 
-  const dimBar: DimensionBar = { marginFloor, refusalThreshold };
+  const dimBar: DimensionBar = { primary, marginFloor, refusalThreshold };
 
-  // Pass-rate bar: 20% below the teaching cell's achieved pass rate at the derived
-  // margin/refusal bar (D-057(a)), rounded to 0.05 — a floor the teaching config clears
-  // with headroom and a thinner config fails. NO_EVIDENCE runs are fails (A(g) convention).
+  // C4 corroborating circulation pass rate (D-065: circulation is retained as corroborating
+  // evidence, NOT the gate). The fraction of runs the fine good's circulation margin clears
+  // the floor, H6-headroom'd — reported alongside the primary refusal gate, never deciding it.
+  let corroborBar: DerivedBar | null = null;
+  if (primary === "refusal") {
+    const corr = teaching.metrics.map((m) => corroboratingPassRun(m, dimBar)).filter((v): v is boolean => v !== null);
+    const corrRate = corr.length ? passRate(corr).rate : NaN;
+    const corrValue = Number.isNaN(corrRate) ? NaN : h6FloorBar(corrRate, 0.05);
+    corroborBar = {
+      name: `circulation corroborating pass rate (fine−indivisible margin ≥ ${marginFloor.toFixed(2)}; not the gate)`,
+      role: "corroborating",
+      value: corrValue, observedBase: corrRate,
+      basis: `teaching cell ${tLabel}: fraction of runs the circulation margin clears the floor (D-065: circulation corroborating)`,
+      failableDirection: "down",
+      nonTriviallyFailable: runs.some((r) => {
+        const c = r.metrics.map((m) => corroboratingPassRun(m, dimBar)).filter((v): v is boolean => v !== null);
+        return c.length > 0 && passRate(c).rate < corrValue;
+      }),
+    };
+  }
+
+  // bars[] in role order: primary gate first, then any corroborator, then the ceiling.
+  const bars: DerivedBar[] = primary === "refusal"
+    ? [refusalBar!, corroborBar!, noEvidenceBar] // C4: refusal floor (gate), circulation (corroborating), NO_EVIDENCE
+    : [marginBar, noEvidenceBar]; // C3: persistence margin (gate), NO_EVIDENCE
+
+  // Pass-rate bar: 20% below the teaching cell's achieved pass rate on the PRIMARY gate
+  // (D-057(a)), rounded to 0.05 — a floor the teaching config clears with headroom and a
+  // weaker config fails. NO_EVIDENCE runs are fails (A(g) convention).
   const teachingPassRate = passRate(teaching.metrics.map((m) => dimensionPassRun(m, dimBar))).rate;
   const passRateBarValue = h6FloorBar(teachingPassRate, 0.05);
   const passRateBar: DerivedBar = {
-    name: `${beat.metric} pass rate (runs demonstrating the lesson)`,
+    name: `${primary === "refusal" ? "change-making refusal" : beat.metric} pass rate (runs demonstrating the lesson)`,
+    role: "primary",
     value: passRateBarValue, observedBase: teachingPassRate,
-    basis: `teaching cell ${tLabel}: fraction of runs passing the derived margin${refusalThreshold !== null ? "+refusal" : ""} bar`,
+    basis: `teaching cell ${tLabel}: fraction of runs passing the primary ${primary === "refusal" ? "refusal-differential" : "persistence-margin"} bar`,
     failableDirection: "down",
     nonTriviallyFailable: runs.some((r) => passRate(r.metrics.map((m) => dimensionPassRun(m, dimBar))).rate < passRateBarValue),
   };
@@ -653,7 +719,8 @@ function runDimensionBeat(beat: VillageBeat): C0BeatReport {
   const cells: C0Cell[] = runs.map((r) => {
     const s = summaries.get(r)!;
     const rate = passRate(r.metrics.map((m) => dimensionPassRun(m, dimBar))).rate;
-    return { ...s, passRate: rate, meetsBar: rate >= passRateBarValue };
+    const corrob = r.metrics.map((m) => corroboratingPassRun(m, dimBar)).filter((v): v is boolean => v !== null);
+    return { ...s, passRate: rate, meetsBar: rate >= passRateBarValue, corroboratingPassRate: corrob.length ? passRate(corrob).rate : NaN };
   });
 
   return {

@@ -5,23 +5,26 @@
   "teachingCell": "N×filler=N=16,f=1",
   "bars": [
     {
-      "name": "circulation visible-margin floor (favored − worst)",
-      "value": 0.05,
-      "observedBase": 0.11333333333333334,
-      "basis": "teaching cell N×filler=N=16,f=1: 5th-pct favored−worst margin over defined runs",
-      "failableDirection": "down",
-      "nonTriviallyFailable": false
-    },
-    {
       "name": "change-making refusal floor (indivisible − fine, per unit)",
+      "role": "primary",
       "value": 3,
       "observedBase": 4.893750000000001,
-      "basis": "teaching cell N×filler=N=16,f=1: 5th-pct indivisible−fine divisibility-refusal rate",
+      "basis": "teaching cell N×filler=N=16,f=1: 5th-pct indivisible−fine divisibility-refusal rate; failable via A2:divisibility (collapses to 0)",
       "failableDirection": "down",
-      "nonTriviallyFailable": false
+      "nonTriviallyFailable": true
+    },
+    {
+      "name": "circulation corroborating pass rate (fine−indivisible margin ≥ 0.05; not the gate)",
+      "role": "corroborating",
+      "value": 0.75,
+      "observedBase": 0.98,
+      "basis": "teaching cell N×filler=N=16,f=1: fraction of runs the circulation margin clears the floor (D-065: circulation corroborating)",
+      "failableDirection": "down",
+      "nonTriviallyFailable": true
     },
     {
       "name": "tolerated favored NO_EVIDENCE rate (A(g) convention; §9.1)",
+      "role": "ceiling",
       "value": 0,
       "observedBase": 0,
       "basis": "teaching cell N×filler=N=16,f=1: favored-good NO_EVIDENCE rate",
@@ -30,10 +33,11 @@
     }
   ],
   "passRateBar": {
-    "name": "circulation pass rate (runs demonstrating the lesson)",
+    "name": "change-making refusal pass rate (runs demonstrating the lesson)",
+    "role": "primary",
     "value": 0.75,
-    "observedBase": 0.96,
-    "basis": "teaching cell N×filler=N=16,f=1: fraction of runs passing the derived margin+refusal bar",
+    "observedBase": 0.98,
+    "basis": "teaching cell N×filler=N=16,f=1: fraction of runs passing the primary refusal-differential bar",
     "failableDirection": "down",
     "nonTriviallyFailable": true
   },
@@ -55,8 +59,9 @@
       "marginP50": 0.5,
       "orderedRate": 0.38,
       "refusalGapMean": 55.538507733007734,
-      "passRate": 0.68,
-      "meetsBar": false
+      "passRate": 0.84,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.82
     },
     {
       "axis": "N×filler",
@@ -75,8 +80,9 @@
       "marginP50": 0.5,
       "orderedRate": 0.28,
       "refusalGapMean": 56.636283549783556,
-      "passRate": 0.64,
-      "meetsBar": false
+      "passRate": 0.86,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.78
     },
     {
       "axis": "N×filler",
@@ -95,8 +101,9 @@
       "marginP50": 0.5,
       "orderedRate": 0.24,
       "refusalGapMean": 54.86933333333332,
-      "passRate": 0.62,
-      "meetsBar": false
+      "passRate": 0.88,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.74
     },
     {
       "axis": "N×filler",
@@ -115,8 +122,9 @@
       "marginP50": 0.35000000000000003,
       "orderedRate": 0.44,
       "refusalGapMean": 59.70588888888889,
-      "passRate": 0.82,
-      "meetsBar": true
+      "passRate": 0.98,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.82
     },
     {
       "axis": "N×filler",
@@ -135,8 +143,9 @@
       "marginP50": 0.6333333333333333,
       "orderedRate": 0.42,
       "refusalGapMean": 46.90236202686202,
-      "passRate": 0.78,
-      "meetsBar": true
+      "passRate": 0.86,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.92
     },
     {
       "axis": "N×filler",
@@ -155,8 +164,9 @@
       "marginP50": 0.5,
       "orderedRate": 0.2,
       "refusalGapMean": 40.73314285714286,
-      "passRate": 0.7,
-      "meetsBar": false
+      "passRate": 0.92,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.76
     },
     {
       "axis": "N×filler",
@@ -175,8 +185,9 @@
       "marginP50": 0.437061403508772,
       "orderedRate": 0.52,
       "refusalGapMean": 51.2919413919414,
-      "passRate": 0.96,
-      "meetsBar": true
+      "passRate": 0.98,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.98
     },
     {
       "axis": "N×filler",
@@ -195,8 +206,9 @@
       "marginP50": 0.5387362637362638,
       "orderedRate": 0.44,
       "refusalGapMean": 46.985002830502815,
-      "passRate": 0.78,
-      "meetsBar": true
+      "passRate": 0.88,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.9
     },
     {
       "axis": "N×filler",
@@ -215,8 +227,9 @@
       "marginP50": 0.75,
       "orderedRate": 0.44,
       "refusalGapMean": 44.992492063492065,
-      "passRate": 0.8,
-      "meetsBar": true
+      "passRate": 0.9,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.88
     },
     {
       "axis": "placement",
@@ -235,8 +248,9 @@
       "marginP50": 0.16666666666666669,
       "orderedRate": 0.1,
       "refusalGapMean": 51.33199999999999,
-      "passRate": 0.44,
-      "meetsBar": false
+      "passRate": 0.92,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.52
     },
     {
       "axis": "placement",
@@ -255,8 +269,9 @@
       "marginP50": 0.4,
       "orderedRate": 0.32,
       "refusalGapMean": 53.061282939282925,
-      "passRate": 0.72,
-      "meetsBar": false
+      "passRate": 0.78,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.92
     },
     {
       "axis": "DOM×WINDOW",
@@ -275,8 +290,9 @@
       "marginP50": 0.3849206349206349,
       "orderedRate": 0.36,
       "refusalGapMean": 56.95630280830281,
-      "passRate": 0.8,
-      "meetsBar": true
+      "passRate": 0.96,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.84
     },
     {
       "axis": "DOM×WINDOW",
@@ -295,8 +311,9 @@
       "marginP50": 0.3454545454545454,
       "orderedRate": 0.44,
       "refusalGapMean": 58.08846825396824,
-      "passRate": 0.82,
-      "meetsBar": true
+      "passRate": 0.98,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.84
     },
     {
       "axis": "DOM×WINDOW",
@@ -315,8 +332,9 @@
       "marginP50": 0.35000000000000003,
       "orderedRate": 0.44,
       "refusalGapMean": 59.70588888888889,
-      "passRate": 0.82,
-      "meetsBar": true
+      "passRate": 0.98,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.82
     },
     {
       "axis": "DOM×WINDOW",
@@ -335,8 +353,30 @@
       "marginP50": 0.35000000000000003,
       "orderedRate": 0.44,
       "refusalGapMean": 59.70588888888889,
-      "passRate": 0.82,
-      "meetsBar": true
+      "passRate": 0.98,
+      "meetsBar": true,
+      "corroboratingPassRate": 0.82
+    },
+    {
+      "axis": "A2-ablation",
+      "value": "divisibility-off",
+      "n": 16,
+      "fillerCount": 1,
+      "placement": "round-robin",
+      "metric": "circulation",
+      "teaching": false,
+      "capOutRate": 0.46,
+      "noEvidenceRate": 0,
+      "favoredStatMean": 1.1006874239846762,
+      "worstStatMean": 1.1142383131493165,
+      "marginMean": -0.013550889164640265,
+      "marginP05": -0.1223381716429596,
+      "marginP50": -0.0103118159560317,
+      "orderedRate": 0.12,
+      "refusalGapMean": 0,
+      "passRate": 0,
+      "meetsBar": false,
+      "corroboratingPassRate": 0.12
     }
   ],
   "feasible": true

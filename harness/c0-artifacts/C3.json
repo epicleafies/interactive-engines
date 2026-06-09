@@ -6,6 +6,7 @@
   "bars": [
     {
       "name": "persistence visible-margin floor (favored − worst)",
+      "role": "primary",
       "value": 0.5,
       "observedBase": 0.6352673796791444,
       "basis": "teaching cell N×filler=N=16,f=3: 5th-pct favored−worst margin over defined runs",
@@ -14,6 +15,7 @@
     },
     {
       "name": "tolerated favored NO_EVIDENCE rate (A(g) convention; §9.1)",
+      "role": "ceiling",
       "value": 0,
       "observedBase": 0,
       "basis": "teaching cell N×filler=N=16,f=3: favored-good NO_EVIDENCE rate",
@@ -23,9 +25,10 @@
   ],
   "passRateBar": {
     "name": "persistence pass rate (runs demonstrating the lesson)",
+    "role": "primary",
     "value": 0.8,
     "observedBase": 1,
-    "basis": "teaching cell N×filler=N=16,f=3: fraction of runs passing the derived margin bar",
+    "basis": "teaching cell N×filler=N=16,f=3: fraction of runs passing the primary persistence-margin bar",
     "failableDirection": "down",
     "nonTriviallyFailable": true
   },
@@ -48,7 +51,8 @@
       "orderedRate": 0.96,
       "refusalGapMean": null,
       "passRate": 0.38,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -68,7 +72,8 @@
       "orderedRate": 0.68,
       "refusalGapMean": null,
       "passRate": 0.92,
-      "meetsBar": true
+      "meetsBar": true,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -88,7 +93,8 @@
       "orderedRate": 0.64,
       "refusalGapMean": null,
       "passRate": 0.92,
-      "meetsBar": true
+      "meetsBar": true,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -108,7 +114,8 @@
       "orderedRate": 0.9,
       "refusalGapMean": null,
       "passRate": 0.02,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -128,7 +135,8 @@
       "orderedRate": 0.82,
       "refusalGapMean": null,
       "passRate": 0.96,
-      "meetsBar": true
+      "meetsBar": true,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -148,7 +156,8 @@
       "orderedRate": 0.76,
       "refusalGapMean": null,
       "passRate": 0.94,
-      "meetsBar": true
+      "meetsBar": true,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -168,7 +177,8 @@
       "orderedRate": 0.98,
       "refusalGapMean": null,
       "passRate": 0,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -188,7 +198,8 @@
       "orderedRate": 0.9,
       "refusalGapMean": null,
       "passRate": 1,
-      "meetsBar": true
+      "meetsBar": true,
+      "corroboratingPassRate": null
     },
     {
       "axis": "N×filler",
@@ -208,7 +219,8 @@
       "orderedRate": 0.7,
       "refusalGapMean": null,
       "passRate": 0.96,
-      "meetsBar": true
+      "meetsBar": true,
+      "corroboratingPassRate": null
     },
     {
       "axis": "placement",
@@ -228,7 +240,8 @@
       "orderedRate": 0.3,
       "refusalGapMean": null,
       "passRate": 0.66,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "placement",
@@ -248,7 +261,8 @@
       "orderedRate": 0.52,
       "refusalGapMean": null,
       "passRate": 0.96,
-      "meetsBar": true
+      "meetsBar": true,
+      "corroboratingPassRate": null
     },
     {
       "axis": "DOM×WINDOW",
@@ -268,7 +282,8 @@
       "orderedRate": 0.98,
       "refusalGapMean": null,
       "passRate": 0,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "DOM×WINDOW",
@@ -288,7 +303,8 @@
       "orderedRate": 0.98,
       "refusalGapMean": null,
       "passRate": 0.04,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "DOM×WINDOW",
@@ -308,7 +324,8 @@
       "orderedRate": 0.9,
       "refusalGapMean": null,
       "passRate": 0.02,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "DOM×WINDOW",
@@ -328,7 +345,8 @@
       "orderedRate": 0.9,
       "refusalGapMean": null,
       "passRate": 0.02,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     },
     {
       "axis": "focal-lever",
@@ -348,7 +366,8 @@
       "orderedRate": 0.62,
       "refusalGapMean": null,
       "passRate": 0.96,
-      "meetsBar": true
+      "meetsBar": true,
+      "corroboratingPassRate": null
     },
     {
       "axis": "focal-lever",
@@ -368,7 +387,8 @@
       "orderedRate": 0.86,
       "refusalGapMean": null,
       "passRate": 0,
-      "meetsBar": false
+      "meetsBar": false,
+      "corroboratingPassRate": null
     }
   ],
   "feasible": true

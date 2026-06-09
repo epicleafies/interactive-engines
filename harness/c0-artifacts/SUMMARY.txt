@@ -1,5 +1,5 @@
-C0 village re-run — per-dimension bars (criteria v2.4; D-059/060/061/063; 50-seed batches)
-bars C0-FILLED per H6 (D-057(a)); teaching cell cited; · = robustness cell (not a teaching candidate)
+C0 village re-run — per-dimension bars (criteria v2.4; D-059/060/061/063/065; 50-seed batches)
+bars C0-FILLED per H6 (D-057(a)); teaching cell cited; · = robustness cell. C4 gate is refusal-primary (D-065).
 
 === C1 (desirability, metric=acceptance) ===
     NOT REACHED — no teaching cell meets the bar (C0-escape candidate; register ruling, not a bar move)
@@ -27,11 +27,11 @@ bars C0-FILLED per H6 (D-057(a)); teaching cell cited; · = robustness cell (not
     FEASIBLE — the teaching cell meets its pass-rate bar
     teaching cell: N×filler=N=16,f=3
     C0-filled bars (H6 — for closing-entry ratification):
-      persistence pass rate (runs demonstrating the lesson) = 0.800  [H6: down 20% from observed 1.000; failable]
-        basis: teaching cell N×filler=N=16,f=3: fraction of runs passing the derived margin bar
-      persistence visible-margin floor (favored − worst) = 0.500  [H6: down 20% from observed 0.635; failable]
+      [PRIMARY] persistence pass rate (runs demonstrating the lesson) = 0.800  [H6: down 20% from observed 1.000; failable]
+        basis: teaching cell N×filler=N=16,f=3: fraction of runs passing the primary persistence-margin bar
+      [PRIMARY] persistence visible-margin floor (favored − worst) = 0.500  [H6: down 20% from observed 0.635; failable]
         basis: teaching cell N×filler=N=16,f=3: 5th-pct favored−worst margin over defined runs
-      tolerated favored NO_EVIDENCE rate (A(g) convention; §9.1) = 0.000  [H6: up 20% from observed 0.000; failable]
+      [CEILING] tolerated favored NO_EVIDENCE rate (A(g) convention; §9.1) = 0.000  [H6: up 20% from observed 0.000; failable]
         basis: teaching cell N×filler=N=16,f=3: favored-good NO_EVIDENCE rate
   [PASS] N×filler=N=16,f=3    pass=1.000  noEv=0.000 cap=0.260 | fav=1.000 worst=0.233 margin[mean/p05]=0.767/0.635 ordered=0.900
   [PASS] N×filler=N=12,f=3    pass=0.960  noEv=0.000 cap=0.220 | fav=1.000 worst=0.297 margin[mean/p05]=0.703/0.515 ordered=0.820
@@ -55,29 +55,30 @@ bars C0-FILLED per H6 (D-057(a)); teaching cell cited; · = robustness cell (not
     FEASIBLE — the teaching cell meets its pass-rate bar
     teaching cell: N×filler=N=16,f=1
     C0-filled bars (H6 — for closing-entry ratification):
-      circulation pass rate (runs demonstrating the lesson) = 0.750  [H6: down 20% from observed 0.960; failable]
-        basis: teaching cell N×filler=N=16,f=1: fraction of runs passing the derived margin+refusal bar
-      circulation visible-margin floor (favored − worst) = 0.050  [H6: down 20% from observed 0.113; NOT-FAILABLE (flag: no swept cell fails it)]
-        basis: teaching cell N×filler=N=16,f=1: 5th-pct favored−worst margin over defined runs
-      change-making refusal floor (indivisible − fine, per unit) = 3.000  [H6: down 20% from observed 4.894; NOT-FAILABLE (flag: no swept cell fails it)]
-        basis: teaching cell N×filler=N=16,f=1: 5th-pct indivisible−fine divisibility-refusal rate
-      tolerated favored NO_EVIDENCE rate (A(g) convention; §9.1) = 0.000  [H6: up 20% from observed 0.000; NOT-FAILABLE (flag: no swept cell fails it)]
+      [PRIMARY] change-making refusal pass rate (runs demonstrating the lesson) = 0.750  [H6: down 20% from observed 0.980; failable]
+        basis: teaching cell N×filler=N=16,f=1: fraction of runs passing the primary refusal-differential bar
+      [PRIMARY] change-making refusal floor (indivisible − fine, per unit) = 3.000  [H6: down 20% from observed 4.894; failable]
+        basis: teaching cell N×filler=N=16,f=1: 5th-pct indivisible−fine divisibility-refusal rate; failable via A2:divisibility (collapses to 0)
+      [CORROBORATING] circulation corroborating pass rate (fine−indivisible margin ≥ 0.05; not the gate) = 0.750  [H6: down 20% from observed 0.980; failable]
+        basis: teaching cell N×filler=N=16,f=1: fraction of runs the circulation margin clears the floor (D-065: circulation corroborating)
+      [CEILING] tolerated favored NO_EVIDENCE rate (A(g) convention; §9.1) = 0.000  [H6: up 20% from observed 0.000; NOT-FAILABLE (flag: no swept cell fails it)]
         basis: teaching cell N×filler=N=16,f=1: favored-good NO_EVIDENCE rate
-  [PASS] N×filler=N=16,f=1    pass=0.960  noEv=0.000 cap=0.980 | fav=0.967 worst=0.504 margin[mean/p05]=0.462/0.113 refusalGap=51.292
-  [PASS] N×filler=N=12,f=1    pass=0.820  noEv=0.000 cap=0.980 | fav=0.784 worst=0.433 margin[mean/p05]=0.350/0.000 refusalGap=59.706
-  [PASS]·DOM×WINDOW=dom=0.5,win=16 pass=0.820  noEv=0.000 cap=0.960 | fav=0.822 worst=0.459 margin[mean/p05]=0.364/0.000 refusalGap=58.088
-  [PASS]·DOM×WINDOW=dom=0.75,win=12 pass=0.820  noEv=0.000 cap=0.980 | fav=0.784 worst=0.433 margin[mean/p05]=0.350/0.000 refusalGap=59.706
-  [PASS]·DOM×WINDOW=dom=1,win=12 pass=0.820  noEv=0.000 cap=0.980 | fav=0.784 worst=0.433 margin[mean/p05]=0.350/0.000 refusalGap=59.706
-  [PASS] N×filler=N=16,f=5    pass=0.800  noEv=0.000 cap=0.860 | fav=1.221 worst=0.389 margin[mean/p05]=0.831/0.000 refusalGap=44.992
-  [PASS]·DOM×WINDOW=dom=0.5,win=8 pass=0.800  noEv=0.000 cap=0.960 | fav=0.849 worst=0.458 margin[mean/p05]=0.391/0.000 refusalGap=56.956
-  [PASS] N×filler=N=12,f=3    pass=0.780  noEv=0.000 cap=0.820 | fav=1.186 worst=0.485 margin[mean/p05]=0.701/0.000 refusalGap=46.902
-  [PASS] N×filler=N=16,f=3    pass=0.780  noEv=0.000 cap=0.840 | fav=1.031 worst=0.456 margin[mean/p05]=0.575/0.000 refusalGap=46.985
-  [    ] placement=blocked,f=1 pass=0.720  noEv=0.000 cap=0.880 | fav=1.014 worst=0.512 margin[mean/p05]=0.501/0.000 refusalGap=53.061
-  [    ] N×filler=N=12,f=5    pass=0.700  noEv=0.000 cap=0.880 | fav=0.903 worst=0.307 margin[mean/p05]=0.596/0.000 refusalGap=40.733
-  [    ] N×filler=N=10,f=1    pass=0.680  noEv=0.000 cap=0.860 | fav=0.947 worst=0.397 margin[mean/p05]=0.550/0.000 refusalGap=55.539
-  [    ] N×filler=N=10,f=3    pass=0.640  noEv=0.000 cap=0.920 | fav=0.791 worst=0.274 margin[mean/p05]=0.517/0.000 refusalGap=56.636
-  [    ] N×filler=N=10,f=5    pass=0.620  noEv=0.000 cap=0.920 | fav=0.913 worst=0.204 margin[mean/p05]=0.710/0.000 refusalGap=54.869
-  [    ] placement=blocked,f=5 pass=0.440  noEv=0.000 cap=1.000 | fav=0.472 worst=0.188 margin[mean/p05]=0.285/0.000 refusalGap=51.332
+  [PASS] N×filler=N=12,f=1    pass=0.980  noEv=0.000 cap=0.980 | refusalGap=59.706 | circ-corrob=0.820 (fav/worst=0.784/0.433)
+  [PASS] N×filler=N=16,f=1    pass=0.980  noEv=0.000 cap=0.980 | refusalGap=51.292 | circ-corrob=0.980 (fav/worst=0.967/0.504)
+  [PASS]·DOM×WINDOW=dom=0.5,win=16 pass=0.980  noEv=0.000 cap=0.960 | refusalGap=58.088 | circ-corrob=0.840 (fav/worst=0.822/0.459)
+  [PASS]·DOM×WINDOW=dom=0.75,win=12 pass=0.980  noEv=0.000 cap=0.980 | refusalGap=59.706 | circ-corrob=0.820 (fav/worst=0.784/0.433)
+  [PASS]·DOM×WINDOW=dom=1,win=12 pass=0.980  noEv=0.000 cap=0.980 | refusalGap=59.706 | circ-corrob=0.820 (fav/worst=0.784/0.433)
+  [PASS]·DOM×WINDOW=dom=0.5,win=8 pass=0.960  noEv=0.000 cap=0.960 | refusalGap=56.956 | circ-corrob=0.840 (fav/worst=0.849/0.458)
+  [PASS] N×filler=N=12,f=5    pass=0.920  noEv=0.000 cap=0.880 | refusalGap=40.733 | circ-corrob=0.760 (fav/worst=0.903/0.307)
+  [PASS] placement=blocked,f=5 pass=0.920  noEv=0.000 cap=1.000 | refusalGap=51.332 | circ-corrob=0.520 (fav/worst=0.472/0.188)
+  [PASS] N×filler=N=16,f=5    pass=0.900  noEv=0.000 cap=0.860 | refusalGap=44.992 | circ-corrob=0.880 (fav/worst=1.221/0.389)
+  [PASS] N×filler=N=10,f=5    pass=0.880  noEv=0.000 cap=0.920 | refusalGap=54.869 | circ-corrob=0.740 (fav/worst=0.913/0.204)
+  [PASS] N×filler=N=16,f=3    pass=0.880  noEv=0.000 cap=0.840 | refusalGap=46.985 | circ-corrob=0.900 (fav/worst=1.031/0.456)
+  [PASS] N×filler=N=10,f=3    pass=0.860  noEv=0.000 cap=0.920 | refusalGap=56.636 | circ-corrob=0.780 (fav/worst=0.791/0.274)
+  [PASS] N×filler=N=12,f=3    pass=0.860  noEv=0.000 cap=0.820 | refusalGap=46.902 | circ-corrob=0.920 (fav/worst=1.186/0.485)
+  [PASS] N×filler=N=10,f=1    pass=0.840  noEv=0.000 cap=0.860 | refusalGap=55.539 | circ-corrob=0.820 (fav/worst=0.947/0.397)
+  [PASS] placement=blocked,f=1 pass=0.780  noEv=0.000 cap=0.880 | refusalGap=53.061 | circ-corrob=0.920 (fav/worst=1.014/0.512)
+  [    ]·A2-ablation=divisibility-off pass=0.000  noEv=0.000 cap=0.460 | refusalGap=0.000 | circ-corrob=0.120 (fav/worst=1.101/1.114)
 
 Beats reaching their bar: C3, C4
 Beats NOT reaching their bar (escape candidates): C1

@@ -24,7 +24,7 @@ const f = (x: number): string => (Number.isNaN(x) ? "  —  " : x.toFixed(3));
 
 function renderBar(b: DerivedBar): string {
   const failable = b.nonTriviallyFailable ? "failable" : "NOT-FAILABLE (flag: no swept cell fails it)";
-  return `      ${b.name} = ${f(b.value)}  [H6: ${b.failableDirection} 20% from observed ${f(b.observedBase)}; ${failable}]\n        basis: ${b.basis}`;
+  return `      [${b.role.toUpperCase()}] ${b.name} = ${f(b.value)}  [H6: ${b.failableDirection} 20% from observed ${f(b.observedBase)}; ${failable}]\n        basis: ${b.basis}`;
 }
 
 function renderCell(c: C0Cell): string {
@@ -33,15 +33,17 @@ function renderCell(c: C0Cell): string {
   const t = c.teaching ? " " : "·"; // · marks a robustness cell (not a teaching candidate)
   const dim = c.metric === "acceptance"
     ? `favA=${f(c.favoredStatMean)}`
-    : `fav=${f(c.favoredStatMean)} worst=${f(c.worstStatMean)} margin[mean/p05]=${f(c.marginMean)}/${f(c.marginP05)}` +
-      (c.metric === "circulation" ? ` refusalGap=${f(c.refusalGapMean)}` : ` ordered=${f(c.orderedRate)}`);
+    : c.metric === "circulation"
+      ? `refusalGap=${f(c.refusalGapMean)} | circ-corrob=${f(c.corroboratingPassRate)} (fav/worst=${f(c.favoredStatMean)}/${f(c.worstStatMean)})`
+      : `fav=${f(c.favoredStatMean)} worst=${f(c.worstStatMean)} margin[mean/p05]=${f(c.marginMean)}/${f(c.marginP05)} ordered=${f(c.orderedRate)}`;
+  // For C4 `pass` is the PRIMARY refusal-differential gate (D-065); `circ-corrob` is the corroborating circulation check.
   return `  [${mark}]${t}${id} pass=${f(c.passRate)}  noEv=${f(c.noEvidenceRate)} cap=${f(c.capOutRate)} | ${dim}`;
 }
 
 function render(reports: readonly C0BeatReport[]): string {
   const lines: string[] = [];
-  lines.push("C0 village re-run — per-dimension bars (criteria v2.4; D-059/060/061/063; 50-seed batches)");
-  lines.push("bars C0-FILLED per H6 (D-057(a)); teaching cell cited; · = robustness cell (not a teaching candidate)");
+  lines.push("C0 village re-run — per-dimension bars (criteria v2.4; D-059/060/061/063/065; 50-seed batches)");
+  lines.push("bars C0-FILLED per H6 (D-057(a)); teaching cell cited; · = robustness cell. C4 gate is refusal-primary (D-065).");
   lines.push("");
   for (const b of reports) {
     lines.push(`=== ${b.id} (${b.focal}, metric=${b.metric}) ===`);
